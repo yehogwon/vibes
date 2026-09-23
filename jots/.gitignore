@@ -1,12 +1,9 @@
-# Xcode
-xcuserdata/
-DerivedData/
-*.xcresult
 /build/
 
-# Swift Package Manager (Packages/JotsCore, Tools)
+# Swift Package Manager (the app and Tools)
 .build/
 .swiftpm/
 
-# Personal signing settings (team ID), see Config/Signing.xcconfig
-Config/Signing.local.xcconfig
+# Personal signing settings (team ID, provisioning profile), see Config/Signing.local.mk.example
+Config/Signing.local.mk
+Config/*.provisionprofile

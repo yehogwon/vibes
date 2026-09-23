@@ -14,6 +14,7 @@ concurrency:
 permissions:
   contents: read
 
+# The runner's Xcode is only used for its Swift toolchain; the app builds with SwiftPM.
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
 
@@ -27,17 +28,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Xcode version
-        id: xcode
+      - name: Swift version
+        id: swift
         run: |
-          xcodebuild -version
-          echo "version=$(xcodebuild -version | awk 'NR==1 {v=$2} NR==2 {b=$3} END {print v "-" b}')" >> "$GITHUB_OUTPUT"
+          swift --version
+          echo "version=$(swift --version 2>/dev/null | sed -n 's/.*(swiftlang-\([^ ]*\).*/\1/p')" >> "$GITHUB_OUTPUT"
 
       - name: Cache swift-format build
         uses: actions/cache@v6
         with:
           path: jots/Tools/.build
-          key: swift-format-${{ runner.os }}-xcode-${{ steps.xcode.outputs.version }}-${{ hashFiles('jots/Tools/Package.resolved') }}
+          key: swift-format-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('jots/Tools/Package.resolved') }}
 
       - name: Lint
         run: make -C jots lint
@@ -51,16 +52,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Xcode version
-        run: xcodebuild -version
+      - name: Swift version
+        run: swift --version
 
       - name: Build and test
-        run: make -C jots test
-
-      - name: Upload test results
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: TestResults.xcresult
-          path: jots/build/TestResults.xcresult
-          if-no-files-found: ignore
+        run: make -C jots build test

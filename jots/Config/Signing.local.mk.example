@@ -1,0 +1,15 @@
+# Copy to Signing.local.mk to sign with your team and turn on iCloud sync.
+# iCloud needs a paid Apple Developer Program membership; free personal teams can't use it.
+#
+# 1. Your team ID is at developer.apple.com/account under Membership details.
+# 2. Install an "Apple Development" certificate (developer.apple.com > Certificates), then check
+#    that `security find-identity -p codesigning -v` lists it.
+# 3. Register the App ID io.github.yehogwon.Jots with the iCloud capability and the container
+#    iCloud.io.github.yehogwon.Jots, create a macOS App Development provisioning profile for it
+#    that includes this Mac, and download it next to this file.
+#
+# Then `make install` signs with this identity and embeds the profile.
+
+TEAM_ID = ABCDE12345
+SIGN_IDENTITY = Apple Development
+PROVISIONING_PROFILE = Config/Jots.provisionprofile
