@@ -10,17 +10,21 @@ struct MarkdownEditor: NSViewRepresentable {
     var text: String
     var theme: MarkdownTheme
     var onChange: (String) -> Void
+    /// Called for Escape, which otherwise opens the completion list.
+    var onCancel: () -> Void = {}
 
     final class Coordinator {
         var onChange: (String) -> Void
+        var onCancel: () -> Void
 
-        init(onChange: @escaping (String) -> Void) {
+        init(onChange: @escaping (String) -> Void, onCancel: @escaping () -> Void) {
             self.onChange = onChange
+            self.onCancel = onCancel
         }
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onChange: onChange)
+        Coordinator(onChange: onChange, onCancel: onCancel)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -37,6 +41,7 @@ struct MarkdownEditor: NSViewRepresentable {
 
         let coordinator = context.coordinator
         textView.onTextChange = { coordinator.onChange($0) }
+        textView.onCancel = { coordinator.onCancel() }
 
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
@@ -53,6 +58,7 @@ struct MarkdownEditor: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.onChange = onChange
+        context.coordinator.onCancel = onCancel
         (scrollView.documentView as? MarkdownTextView)?.apply(theme: theme)
     }
 }

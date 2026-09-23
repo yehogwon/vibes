@@ -8,6 +8,8 @@ import JotsCore
 /// needs to appear or disappear.
 final class MarkdownTextView: NSTextView {
     var onTextChange: ((String) -> Void)?
+    /// Handles Escape. When unset, Escape keeps NSTextView's default (the completion list).
+    var onCancel: (() -> Void)?
 
     private(set) var styler = MarkdownStyler()
     /// Lines currently styled with their syntax revealed.
@@ -254,6 +256,14 @@ final class MarkdownTextView: NSTextView {
             return
         }
         super.insertTab(sender)
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        if let onCancel {
+            onCancel()
+        } else {
+            super.cancelOperation(sender)
+        }
     }
 
     override func insertBacktab(_ sender: Any?) {

@@ -12,20 +12,15 @@ struct ScratchpadView: View {
     @State private var showsCopied = false
 
     var body: some View {
-        MarkdownEditor(text: app.file.text, theme: theme) { text in
-            app.file.stage(text)
-            updateStats(for: text, after: .milliseconds(250))
-        }
+        MarkdownEditor(
+            text: app.file.text, theme: theme,
+            onChange: { text in
+                app.file.stage(text)
+                updateStats(for: text, after: .milliseconds(250))
+            },
+            onCancel: { app.closeScratchpad() }
+        )
         .safeAreaInset(edge: .bottom, spacing: 0) { footer }
-        .navigationTitle("Jots")
-        .toolbar {
-            ToolbarItemGroup {
-                Button("Copy", systemImage: "doc.on.doc") { app.copy() }
-                    .help("Copy everything (⇧⌘C)")
-                Button("Export", systemImage: "square.and.arrow.up") { app.export() }
-                    .help("Save a copy as a Markdown file (⇧⌘E)")
-            }
-        }
         .onAppear { updateStats(for: app.file.text, after: .zero) }
         .onChange(of: app.copiedAt) { _, _ in flashCopied() }
     }
@@ -51,7 +46,27 @@ struct ScratchpadView: View {
                 Label("Copied", systemImage: "checkmark")
                     .transition(.opacity)
             }
+            Button("Copy All", systemImage: "doc.on.doc") { app.copy() }
+                .labelStyle(.iconOnly)
+                .help("Copy everything (⇧⌘C)")
+            Menu {
+                Button("Export as Markdown…") { app.export() }
+                Button("Show in Finder") { app.showInFinder() }
+                Divider()
+                Button("Settings…") {
+                    app.closeScratchpad()
+                    app.showSettings()
+                }
+                Button("Quit Jots") { NSApp.terminate(nil) }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("More")
         }
+        .buttonStyle(.borderless)
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 12)

@@ -10,11 +10,14 @@ final class AppState {
     let file: JotFile
     /// When the text was last copied, for the editor's "Copied" confirmation.
     private(set) var copiedAt: Date?
+    /// Closes the scratchpad popover. Set by the app delegate, which owns it.
+    @ObservationIgnored var closeScratchpad: () -> Void = {}
 
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @ObservationIgnored private let settingsWindow = SettingsWindowController()
 
     init() {
-        file = JotFile(url: Self.fileURL())
+        file = JotFile(url: URL.applicationSupportDirectory.appendingPathComponent("Jots.md"))
 
         let center = NotificationCenter.default
         for name in [NSApplication.willResignActiveNotification, NSApplication.willTerminateNotification] {
@@ -23,20 +26,6 @@ final class AppState {
                     MainActor.assumeIsolated { self?.file.flush() }
                 })
         }
-    }
-
-    /// `Jots.md` in the app's Application Support folder. UI tests pass `-uiTesting` to use a
-    /// throwaway file instead, and `-uiTestingReset` to start it empty.
-    private static func fileURL() -> URL {
-        let arguments = ProcessInfo.processInfo.arguments
-        guard arguments.contains("-uiTesting") else {
-            return URL.applicationSupportDirectory.appendingPathComponent("Jots.md")
-        }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("UITest-Jots.md")
-        if arguments.contains("-uiTestingReset") {
-            try? FileManager.default.removeItem(at: url)
-        }
-        return url
     }
 
     // MARK: - Commands
@@ -50,6 +39,7 @@ final class AppState {
 
     func export() {
         file.flush()
+        NSApp.activate()
         let panel = NSSavePanel()
         panel.allowedContentTypes = [UTType(filenameExtension: "md", conformingTo: .plainText) ?? .plainText]
         panel.canCreateDirectories = true
@@ -69,5 +59,9 @@ final class AppState {
         }
         file.flush()
         NSWorkspace.shared.activateFileViewerSelecting([file.url])
+    }
+
+    func showSettings() {
+        settingsWindow.show()
     }
 }

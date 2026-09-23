@@ -4,7 +4,8 @@
 #   make lint     fail on any formatting drift or lint warning
 #   make build    build the app
 #   make test     build the app and run the tests
-#   make ui-test  drive the app with the UI tests (needs Automation Mode; not run in CI)
+#   make run      build a debug copy and open it (it appears in the menu bar)
+#   make install  build a release copy into /Applications and open it
 
 SHELL := /bin/bash
 
@@ -13,16 +14,20 @@ TOOLS_PACKAGE := Tools
 SWIFT_FORMAT = $(shell swift build -c release --package-path $(TOOLS_PACKAGE) --show-bin-path)/swift-format
 SWIFT_FORMAT_CONFIG := .swift-format
 # Recursing skips hidden directories, so SwiftPM's .build folders are never formatted.
-SOURCE_PATHS := $(wildcard Jots JotsUITests Packages $(TOOLS_PACKAGE)/Package.swift)
+SOURCE_PATHS := $(wildcard Jots Packages $(TOOLS_PACKAGE)/Package.swift)
 
 PROJECT := Jots.xcodeproj
 SCHEME := Jots
 DESTINATION := platform=macOS,arch=$(shell uname -m)
 RESULT_BUNDLE := build/TestResults.xcresult
-UI_RESULT_BUNDLE := build/UITestResults.xcresult
+# Build products live under build/ so `make run` and `make install` know where the app is.
+DERIVED_DATA := build/DerivedData
+PRODUCTS := $(DERIVED_DATA)/Build/Products
+INSTALL_DIR := /Applications
 # Extra xcodebuild settings, e.g. `make test XCODEBUILD_FLAGS='CODE_SIGNING_ALLOWED=NO'`.
 XCODEBUILD_FLAGS ?=
-XCODEBUILD := xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(DESTINATION)' $(XCODEBUILD_FLAGS)
+XCODEBUILD := xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(DESTINATION)' \
+	-derivedDataPath $(DERIVED_DATA) $(XCODEBUILD_FLAGS)
 
 # Pretty-print through xcbeautify when it's installed; otherwise keep xcodebuild to warnings and errors.
 XCBEAUTIFY := $(shell command -v xcbeautify 2>/dev/null)
@@ -33,7 +38,7 @@ XCODEBUILD := $(XCODEBUILD) -quiet
 XCODEBUILD_OUTPUT :=
 endif
 
-.PHONY: tools format lint build test ui-test clean
+.PHONY: tools format lint build test run install clean
 
 tools:
 	swift build -c release --package-path $(TOOLS_PACKAGE) --product swift-format
@@ -51,10 +56,16 @@ test:
 	rm -rf $(RESULT_BUNDLE)
 	set -o pipefail; $(XCODEBUILD) test -resultBundlePath $(RESULT_BUNDLE) $(XCODEBUILD_OUTPUT)
 
-ui-test:
-	rm -rf $(UI_RESULT_BUNDLE)
-	set -o pipefail; xcodebuild -project $(PROJECT) -scheme JotsUI -destination '$(DESTINATION)' $(XCODEBUILD_FLAGS) \
-		test -resultBundlePath $(UI_RESULT_BUNDLE) $(XCODEBUILD_OUTPUT)
+run: build
+	-pkill -x Jots
+	open $(PRODUCTS)/Debug/Jots.app
+
+install:
+	set -o pipefail; $(XCODEBUILD) -configuration Release build $(XCODEBUILD_OUTPUT)
+	-pkill -x Jots
+	rm -rf $(INSTALL_DIR)/Jots.app
+	ditto $(PRODUCTS)/Release/Jots.app $(INSTALL_DIR)/Jots.app
+	open $(INSTALL_DIR)/Jots.app
 
 clean:
 	rm -rf build
