@@ -1,0 +1,392 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		D1A0000000000000000A000A /* JotsCore in Frameworks */ = {isa = PBXBuildFile; productRef = D1A0000000000000000A000B /* JotsCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D1A0000000000000000A001A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D1A0000000000000000A0001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D1A0000000000000000A0006;
+			remoteInfo = Jots;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		D1A0000000000000000A0014 /* JotsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JotsUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D1A0000000000000000A0013 /* JotsCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = JotsCore; path = Packages/JotsCore; sourceTree = "<group>"; };
+		D1A0000000000000000A0004 /* Jots.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jots.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D1A0000000000000000A0015 /* JotsUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = JotsUITests;
+			sourceTree = "<group>";
+		};
+		D1A0000000000000000A0005 /* Jots */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Jots;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D1A0000000000000000A0018 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1A0000000000000000A0008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D1A0000000000000000A000A /* JotsCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D1A0000000000000000A0002 = {
+			isa = PBXGroup;
+			children = (
+				D1A0000000000000000A0013 /* JotsCore */,
+				D1A0000000000000000A0005 /* Jots */,
+				D1A0000000000000000A0015 /* JotsUITests */,
+				D1A0000000000000000A0003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D1A0000000000000000A0003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D1A0000000000000000A0004 /* Jots.app */,
+				D1A0000000000000000A0014 /* JotsUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D1A0000000000000000A0016 /* JotsUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1A0000000000000000A001C /* Build configuration list for PBXNativeTarget "JotsUITests" */;
+			buildPhases = (
+				D1A0000000000000000A0017 /* Sources */,
+				D1A0000000000000000A0018 /* Frameworks */,
+				D1A0000000000000000A0019 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D1A0000000000000000A001B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D1A0000000000000000A0015 /* JotsUITests */,
+			);
+			name = JotsUITests;
+			productName = JotsUITests;
+			productReference = D1A0000000000000000A0014 /* JotsUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		D1A0000000000000000A0006 /* Jots */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1A0000000000000000A0010 /* Build configuration list for PBXNativeTarget "Jots" */;
+			buildPhases = (
+				D1A0000000000000000A0007 /* Sources */,
+				D1A0000000000000000A0008 /* Frameworks */,
+				D1A0000000000000000A0009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D1A0000000000000000A0005 /* Jots */,
+			);
+			name = Jots;
+			packageProductDependencies = (
+				D1A0000000000000000A000B /* JotsCore */,
+			);
+			productName = Jots;
+			productReference = D1A0000000000000000A0004 /* Jots.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D1A0000000000000000A0001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					D1A0000000000000000A0006 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					D1A0000000000000000A0016 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = D1A0000000000000000A0006;
+					};
+				};
+			};
+			buildConfigurationList = D1A0000000000000000A000D /* Build configuration list for PBXProject "Jots" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D1A0000000000000000A0002;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				D1A0000000000000000A000C /* XCLocalSwiftPackageReference "Packages/JotsCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D1A0000000000000000A0003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D1A0000000000000000A0006 /* Jots */,
+				D1A0000000000000000A0016 /* JotsUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D1A0000000000000000A0019 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1A0000000000000000A0009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D1A0000000000000000A0017 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1A0000000000000000A0007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D1A0000000000000000A001B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D1A0000000000000000A0006 /* Jots */;
+			targetProxy = D1A0000000000000000A001A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		D1A0000000000000000A001D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.yehogwon.JotsUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = Jots;
+			};
+			name = Debug;
+		};
+		D1A0000000000000000A001E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.yehogwon.JotsUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = Jots;
+			};
+			name = Release;
+		};
+		D1A0000000000000000A000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		D1A0000000000000000A000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		D1A0000000000000000A0011 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Jots/Jots.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Jots;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.yehogwon.Jots;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D1A0000000000000000A0012 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Jots/Jots.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Jots;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.yehogwon.Jots;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D1A0000000000000000A001C /* Build configuration list for PBXNativeTarget "JotsUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1A0000000000000000A001D /* Debug */,
+				D1A0000000000000000A001E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D1A0000000000000000A000D /* Build configuration list for PBXProject "Jots" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1A0000000000000000A000E /* Debug */,
+				D1A0000000000000000A000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D1A0000000000000000A0010 /* Build configuration list for PBXNativeTarget "Jots" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1A0000000000000000A0011 /* Debug */,
+				D1A0000000000000000A0012 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		D1A0000000000000000A000C /* XCLocalSwiftPackageReference "Packages/JotsCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/JotsCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D1A0000000000000000A000B /* JotsCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JotsCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = D1A0000000000000000A0001 /* Project object */;
+}

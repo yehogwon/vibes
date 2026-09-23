@@ -1,0 +1,66 @@
+name: Jots CI
+
+# Runs on every new tip of a PR into main (opened, synchronize, reopened).
+# No path filters, so the jobs can be required status checks on main.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+
+jobs:
+  lint:
+    name: Lint & format
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Xcode version
+        id: xcode
+        run: |
+          xcodebuild -version
+          echo "version=$(xcodebuild -version | awk 'NR==1 {v=$2} NR==2 {b=$3} END {print v "-" b}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache swift-format build
+        uses: actions/cache@v6
+        with:
+          path: jots/Tools/.build
+          key: swift-format-${{ runner.os }}-xcode-${{ steps.xcode.outputs.version }}-${{ hashFiles('jots/Tools/Package.resolved') }}
+
+      - name: Lint
+        run: make -C jots lint
+
+  build-test:
+    name: Build & test
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Build and test
+        run: make -C jots test
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: TestResults.xcresult
+          path: jots/build/TestResults.xcresult
+          if-no-files-found: ignore

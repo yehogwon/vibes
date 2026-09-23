@@ -1,0 +1,9 @@
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcresult
+/build/
+
+# Swift Package Manager (Packages/JotsCore, Tools)
+.build/
+.swiftpm/
