@@ -40,6 +40,9 @@ SWIFT_FORMAT_CONFIG := .swift-format
 # Recursing skips hidden directories, so SwiftPM's .build folders are never formatted.
 SOURCE_PATHS := Sources Tests Package.swift $(TOOLS_PACKAGE)/Package.swift $(TOOLS_PACKAGE)/MakeIcon.swift
 
+# Quit a running copy and wait for it to exit, or `open` can fail while it's still shutting down.
+QUIT_JOTS := pkill -x Jots; while pgrep -x Jots >/dev/null; do sleep 0.1; done
+
 .PHONY: tools format lint build test run install clean FORCE
 
 tools: $(SWIFT_FORMAT)
@@ -98,12 +101,12 @@ test:
 	swift test
 
 run: build
-	-pkill -x Jots
+	$(QUIT_JOTS)
 	open $(APP)
 
 install:
 	$(MAKE) build CONFIG=release
-	-pkill -x Jots
+	$(QUIT_JOTS)
 	rm -rf $(INSTALL_DIR)/Jots.app
 	ditto build/release/Jots.app $(INSTALL_DIR)/Jots.app
 	open $(INSTALL_DIR)/Jots.app
