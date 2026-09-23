@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let state = AppState()
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
+    private var isFadingOut = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // With no windows open, macOS would otherwise consider the app idle and quit it,
@@ -36,6 +37,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.contentViewController = content
 
         state.start()
+    }
+
+    /// Every close goes through here (Esc, ⌘W, the shortcut, clicking the icon or elsewhere), so
+    /// every close fades out.
+    func popoverShouldClose(_ popover: NSPopover) -> Bool {
+        fadeOutScratchpad()
+        return false
+    }
+
+    /// A popover that's the key window disappears at once instead of animating out, and the
+    /// scratchpad has to be key to take typing. So fade it out here, then close it unanimated.
+    private func fadeOutScratchpad() {
+        guard !isFadingOut, let window = popover.contentViewController?.view.window else { return }
+        isFadingOut = true
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            window.animator().alphaValue = 0
+        } completionHandler: {
+            MainActor.assumeIsolated {
+                self.popover.animates = false
+                self.popover.close()
+                self.popover.animates = true
+                window.alphaValue = 1
+                self.isFadingOut = false
+            }
+        }
     }
 
     func popoverDidClose(_ notification: Notification) {
