@@ -1,0 +1,59 @@
+name: Jots CI
+
+# Runs on every new tip of a PR into main (opened, synchronize, reopened).
+# No path filters, so the jobs can be required status checks on main.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# The runner's Xcode is only used for its Swift toolchain; the app builds with SwiftPM.
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+
+jobs:
+  lint:
+    name: Lint & format
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Swift version
+        id: swift
+        run: |
+          swift --version
+          echo "version=$(swift --version 2>/dev/null | sed -n 's/.*(swiftlang-\([^ ]*\).*/\1/p')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache swift-format build
+        uses: actions/cache@v6
+        with:
+          path: jots/Tools/.build
+          key: swift-format-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('jots/Tools/Package.resolved') }}
+
+      - name: Lint
+        run: make -C jots lint
+
+  build-test:
+    name: Build & test
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build and test
+        run: make -C jots build test
