@@ -19,6 +19,7 @@ enum SettingsKey {
     static let fontFamily = "editor.fontFamily"
     static let fontSize = "editor.fontSize"
     static let hidesSyntax = "editor.hidesSyntax"
+    static let hotKey = "general.hotKey"
 }
 
 /// Fonts, colors, and spacing for the Markdown editor.

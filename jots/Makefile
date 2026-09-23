@@ -26,6 +26,11 @@ PRODUCTS := $(DERIVED_DATA)/Build/Products
 INSTALL_DIR := /Applications
 # Extra xcodebuild settings, e.g. `make test XCODEBUILD_FLAGS='CODE_SIGNING_ALLOWED=NO'`.
 XCODEBUILD_FLAGS ?=
+# With personal signing set up (Config/Signing.local.xcconfig), let Xcode create the iCloud
+# provisioning profile as needed.
+ifneq ($(wildcard Config/Signing.local.xcconfig),)
+XCODEBUILD_FLAGS += -allowProvisioningUpdates
+endif
 XCODEBUILD := xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(DESTINATION)' \
 	-derivedDataPath $(DERIVED_DATA) $(XCODEBUILD_FLAGS)
 

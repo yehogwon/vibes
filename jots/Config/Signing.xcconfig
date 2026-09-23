@@ -1,0 +1,14 @@
+// Code signing for Jots.
+//
+// By default the app is signed ad hoc and keeps the scratchpad on this Mac. That needs no Apple
+// Developer account, and it's what CI builds.
+//
+// To sync through iCloud Drive, copy Signing.local.xcconfig.example to Signing.local.xcconfig
+// (git ignores it), fill in your team ID, and build with `make install`.
+
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+CODE_SIGN_ENTITLEMENTS = Jots/Jots.entitlements
+
+#include? "Signing.local.xcconfig"

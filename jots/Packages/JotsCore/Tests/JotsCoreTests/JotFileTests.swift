@@ -124,3 +124,167 @@ struct TextStatsTests {
         #expect(TextStats(counting: "안녕 하세요") == TextStats(words: 2, characters: 6))
     }
 }
+
+/// Polls until `condition` holds, for changes delivered asynchronously by file coordination.
+@MainActor
+private func eventually(timeout: Duration = .seconds(5), _ condition: () -> Bool) async -> Bool {
+    let deadline = ContinuousClock.now + timeout
+    while ContinuousClock.now < deadline {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(50))
+    }
+    return condition()
+}
+
+/// Writes the way another app or iCloud would: coordinated, but not through the `JotFile`.
+private func writeFromElsewhere(_ text: String, to url: URL) throws {
+    var coordinationError: NSError?
+    var writeError: Error?
+    NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: &coordinationError) { url in
+        do { try text.write(to: url, atomically: true, encoding: .utf8) } catch { writeError = error }
+    }
+    if let error = coordinationError ?? writeError { throw error }
+}
+
+@Suite("JotFile sync")
+@MainActor
+struct JotFileSyncTests {
+    @Test func picksUpChangesMadeElsewhere() async throws {
+        let directory = try TemporaryDirectory()
+        try "before".write(to: directory.file(), atomically: true, encoding: .utf8)
+        let file = JotFile(url: directory.file())
+        let revision = file.externalRevision
+
+        try writeFromElsewhere("after", to: directory.file())
+        #expect(await eventually { file.text == "after" })
+        #expect(file.externalRevision > revision)
+        #expect(!file.hasPendingEdits)
+    }
+
+    @Test func ownSavesDoNotCountAsExternalChanges() async throws {
+        let directory = try TemporaryDirectory()
+        let file = JotFile(url: directory.file())
+        let revision = file.externalRevision
+        file.stage("mine")
+        file.flush()
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(file.externalRevision == revision)
+        #expect(file.conflictCopies.isEmpty)
+    }
+
+    @Test func simultaneousEditsKeepBothVersions() async throws {
+        let directory = try TemporaryDirectory()
+        try "base".write(to: directory.file(), atomically: true, encoding: .utf8)
+        let file = JotFile(url: directory.file())
+        file.saveDelay = .seconds(60)
+        file.stage("typed here")
+
+        try writeFromElsewhere("typed elsewhere", to: directory.file())
+        #expect(await eventually { !file.conflictCopies.isEmpty })
+
+        // The local edit is still the scratchpad and gets saved; the other version is its own file.
+        #expect(file.text == "typed here")
+        file.flush()
+        #expect(try String(contentsOf: directory.file(), encoding: .utf8) == "typed here")
+        let copy = try #require(file.conflictCopies.first)
+        #expect(copy.lastPathComponent.hasPrefix("Jots (conflict "))
+        #expect(try String(contentsOf: copy, encoding: .utf8) == "typed elsewhere")
+    }
+
+    @Test func relocateLoadsTheNewFile() throws {
+        let directory = try TemporaryDirectory()
+        try "old place".write(to: directory.file("a.md"), atomically: true, encoding: .utf8)
+        try "new place".write(to: directory.file("b.md"), atomically: true, encoding: .utf8)
+        let file = JotFile(url: directory.file("a.md"))
+        let revision = file.externalRevision
+
+        file.relocate(to: directory.file("b.md"))
+        #expect(file.url == directory.file("b.md"))
+        #expect(file.text == "new place")
+        #expect(file.externalRevision > revision)
+    }
+
+    @Test func relocateCarryingTextWritesItToTheNewPlace() throws {
+        let directory = try TemporaryDirectory()
+        let file = JotFile(url: directory.file("a.md"))
+        file.stage("keep this")
+        let revision = file.externalRevision
+
+        file.relocate(to: directory.file("b.md"), carryingText: true)
+        #expect(try String(contentsOf: directory.file("b.md"), encoding: .utf8) == "keep this")
+        #expect(try String(contentsOf: directory.file("a.md"), encoding: .utf8) == "keep this")
+        #expect(file.externalRevision == revision)
+    }
+}
+
+@Suite("JotStorage")
+struct JotStorageTests {
+    private func plainMove(_ from: URL, _ to: URL) throws {
+        try FileManager.default.moveItem(at: from, to: to)
+    }
+
+    @Test func staysLocalWithoutICloud() throws {
+        let directory = try TemporaryDirectory()
+        let resolution = JotStorage.resolve(localURL: directory.file(), cloudDocuments: nil, move: plainMove)
+        #expect(resolution.location == .local(directory.file()))
+        #expect(resolution.notice == nil)
+    }
+
+    @Test func movesTheLocalFileIntoICloudTheFirstTime() throws {
+        let directory = try TemporaryDirectory()
+        let local = directory.file("local.md")
+        let cloud = directory.url.appendingPathComponent("cloud/Documents")
+        try "mine".write(to: local, atomically: true, encoding: .utf8)
+
+        let resolution = JotStorage.resolve(localURL: local, cloudDocuments: cloud, move: plainMove)
+        let cloudFile = cloud.appendingPathComponent("Jots.md")
+        #expect(resolution.location == .iCloud(cloudFile))
+        #expect(try String(contentsOf: cloudFile, encoding: .utf8) == "mine")
+        #expect(!FileManager.default.fileExists(atPath: local.path))
+    }
+
+    @Test func keepsBothWhenICloudAlreadyHasDifferentText() throws {
+        let directory = try TemporaryDirectory()
+        let local = directory.file("local.md")
+        let cloud = directory.url.appendingPathComponent("cloud")
+        try FileManager.default.createDirectory(at: cloud, withIntermediateDirectories: true)
+        try "from this mac".write(to: local, atomically: true, encoding: .utf8)
+        try "from icloud".write(to: cloud.appendingPathComponent("Jots.md"), atomically: true, encoding: .utf8)
+
+        let resolution = JotStorage.resolve(
+            localURL: local, cloudDocuments: cloud, deviceName: "Studio", move: plainMove)
+        #expect(resolution.location == .iCloud(cloud.appendingPathComponent("Jots.md")))
+        #expect(resolution.notice != nil)
+        let kept = cloud.appendingPathComponent("Jots (from Studio).md")
+        #expect(try String(contentsOf: kept, encoding: .utf8) == "from this mac")
+        #expect(try String(contentsOf: cloud.appendingPathComponent("Jots.md"), encoding: .utf8) == "from icloud")
+    }
+
+    @Test func dropsTheLocalCopyWhenItMatchesICloud() throws {
+        let directory = try TemporaryDirectory()
+        let local = directory.file("local.md")
+        let cloud = directory.url.appendingPathComponent("cloud")
+        try FileManager.default.createDirectory(at: cloud, withIntermediateDirectories: true)
+        try "same".write(to: local, atomically: true, encoding: .utf8)
+        try "same".write(to: cloud.appendingPathComponent("Jots.md"), atomically: true, encoding: .utf8)
+
+        let resolution = JotStorage.resolve(localURL: local, cloudDocuments: cloud, move: plainMove)
+        #expect(resolution.notice == nil)
+        #expect(!FileManager.default.fileExists(atPath: local.path))
+        #expect(try FileManager.default.contentsOfDirectory(atPath: cloud.path) == ["Jots.md"])
+    }
+
+    @Test func staysLocalIfTheMoveFails() throws {
+        let directory = try TemporaryDirectory()
+        let local = directory.file("local.md")
+        try "mine".write(to: local, atomically: true, encoding: .utf8)
+        struct MoveFailed: Error {}
+
+        let resolution = JotStorage.resolve(
+            localURL: local, cloudDocuments: directory.url.appendingPathComponent("cloud"),
+            move: { _, _ in throw MoveFailed() })
+        #expect(resolution.location == .local(local))
+        #expect(resolution.notice != nil)
+        #expect(try String(contentsOf: local, encoding: .utf8) == "mine")
+    }
+}

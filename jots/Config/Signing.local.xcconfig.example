@@ -1,0 +1,7 @@
+// Copy to Signing.local.xcconfig to sign with your team and turn on iCloud sync.
+// Your team ID is at developer.apple.com/account under Membership details.
+// iCloud needs a paid Apple Developer Program membership; free personal teams can't use it.
+
+DEVELOPMENT_TEAM = ABCDE12345
+CODE_SIGN_IDENTITY = Apple Development
+CODE_SIGN_ENTITLEMENTS = Jots/Jots-iCloud.entitlements

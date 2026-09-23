@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         statusItem = item
 
         state.closeScratchpad = { [weak self] in self?.closeScratchpad(nil) }
+        state.toggleScratchpad = { [weak self] in self?.toggleScratchpad() }
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 480, height: 560)
         popover.delegate = self
@@ -33,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // The popover's size is fixed here; don't let SwiftUI's ideal size override it.
         content.sizingOptions = []
         popover.contentViewController = content
+
+        state.start()
     }
 
     func popoverDidClose(_ notification: Notification) {
@@ -81,6 +84,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSApp.activate()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+    }
+
+    private func toggleScratchpad() {
+        if popover.isShown {
+            closeScratchpad(nil)
+        } else {
+            openScratchpad(nil)
+        }
     }
 
     @objc func closeScratchpad(_ sender: Any?) {

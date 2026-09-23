@@ -218,6 +218,47 @@ final class MarkdownTextView: NSTextView {
         restyleAfterEdit()
     }
 
+    /// Shows text that changed outside the editor, replacing only the part that differs so the
+    /// caret and scroll position stay where they were.
+    func applyExternalText(_ newText: String) {
+        guard let storage = textStorage else { return }
+        let old = storage.mutableString as NSString
+        let new = newText as NSString
+        guard !old.isEqual(to: newText) else { return }
+
+        let shorter = min(old.length, new.length)
+        var prefix = 0
+        while prefix < shorter, old.character(at: prefix) == new.character(at: prefix) {
+            prefix += 1
+        }
+        var suffix = 0
+        while suffix < shorter - prefix,
+            old.character(at: old.length - 1 - suffix) == new.character(at: new.length - 1 - suffix)
+        {
+            suffix += 1
+        }
+        let range = NSRange(location: prefix, length: old.length - prefix - suffix)
+        let replacement = new.substring(with: NSRange(location: prefix, length: new.length - prefix - suffix))
+        let replacementLength = (replacement as NSString).length
+
+        func map(_ location: Int) -> Int {
+            if location <= range.location { return location }
+            if location >= NSMaxRange(range) { return location + replacementLength - range.length }
+            return range.location + replacementLength
+        }
+        let selection = selectedRange()
+        let start = map(selection.location)
+        let mapped = NSRange(location: start, length: max(0, map(NSMaxRange(selection)) - start))
+
+        let wasEditable = isEditable
+        isEditable = true
+        defer { isEditable = wasEditable }
+        guard shouldChangeText(in: range, replacementString: replacement) else { return }
+        storage.replaceCharacters(in: range, with: replacement)
+        setSelectedRange(mapped)
+        didChangeText()
+    }
+
     /// Replaces text as a single undoable change.
     func apply(_ edit: TextEdit) {
         guard let storage = textStorage, shouldChangeText(in: edit.range, replacementString: edit.replacement) else {

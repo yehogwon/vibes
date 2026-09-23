@@ -7,3 +7,6 @@ DerivedData/
 # Swift Package Manager (Packages/JotsCore, Tools)
 .build/
 .swiftpm/
+
+# Personal signing settings (team ID), see Config/Signing.xcconfig
+Config/Signing.local.xcconfig

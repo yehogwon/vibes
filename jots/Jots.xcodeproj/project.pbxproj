@@ -11,13 +11,27 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		D1A0000000000000000A0021 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		D1A0000000000000000A0013 /* JotsCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = JotsCore; path = Packages/JotsCore; sourceTree = "<group>"; };
 		D1A0000000000000000A0004 /* Jots.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jots.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D1A0000000000000000A0020 /* Exceptions for "Jots" folder in "Jots" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D1A0000000000000000A0006 /* Jots */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D1A0000000000000000A0005 /* Jots */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D1A0000000000000000A0020 /* Exceptions for "Jots" folder in "Jots" target */,
+			);
 			path = Jots;
 			sourceTree = "<group>";
 		};
@@ -40,8 +54,17 @@
 			children = (
 				D1A0000000000000000A0013 /* JotsCore */,
 				D1A0000000000000000A0005 /* Jots */,
+				D1A0000000000000000A0022 /* Config */,
 				D1A0000000000000000A0003 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		D1A0000000000000000A0022 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				D1A0000000000000000A0021 /* Signing.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 		D1A0000000000000000A0003 /* Products */ = {
@@ -183,17 +206,16 @@
 		};
 		D1A0000000000000000A0011 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D1A0000000000000000A0021 /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Jots/Jots.entitlements;
-				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Jots/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Jots;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -212,17 +234,16 @@
 		};
 		D1A0000000000000000A0012 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D1A0000000000000000A0021 /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Jots/Jots.entitlements;
-				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Jots/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Jots;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;

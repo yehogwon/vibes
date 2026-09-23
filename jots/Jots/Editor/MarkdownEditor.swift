@@ -3,11 +3,13 @@ import SwiftUI
 
 /// SwiftUI wrapper around `MarkdownTextView`.
 ///
-/// `text` is only read when the view is created: the text view owns the text while it is on
-/// screen, and reports changes through `onChange`. Give the editor a new identity (`.id(...)`)
-/// to load a different jot.
+/// The text view owns the text while it's on screen and reports changes through `onChange`.
+/// `text` is loaded when the view is created and again whenever `revision` changes, which is how
+/// edits from elsewhere (another Mac, another app) reach the editor.
 struct MarkdownEditor: NSViewRepresentable {
     var text: String
+    var revision: Int
+    var isEditable: Bool
     var theme: MarkdownTheme
     var onChange: (String) -> Void
     /// Called for Escape, which otherwise opens the completion list.
@@ -16,6 +18,7 @@ struct MarkdownEditor: NSViewRepresentable {
     final class Coordinator {
         var onChange: (String) -> Void
         var onCancel: () -> Void
+        var revision = 0
 
         init(onChange: @escaping (String) -> Void, onCancel: @escaping () -> Void) {
             self.onChange = onChange
@@ -37,6 +40,8 @@ struct MarkdownEditor: NSViewRepresentable {
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
         textView.setMarkdown(text)
+        textView.isEditable = isEditable
+        context.coordinator.revision = revision
         textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
 
         let coordinator = context.coordinator
@@ -59,6 +64,12 @@ struct MarkdownEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.onChange = onChange
         context.coordinator.onCancel = onCancel
-        (scrollView.documentView as? MarkdownTextView)?.apply(theme: theme)
+        guard let textView = scrollView.documentView as? MarkdownTextView else { return }
+        textView.apply(theme: theme)
+        textView.isEditable = isEditable
+        if revision != context.coordinator.revision {
+            context.coordinator.revision = revision
+            textView.applyExternalText(text)
+        }
     }
 }

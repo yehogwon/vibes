@@ -13,13 +13,14 @@ struct ScratchpadView: View {
 
     var body: some View {
         MarkdownEditor(
-            text: app.file.text, theme: theme,
+            text: app.file.text, revision: app.file.externalRevision, isEditable: app.isEditable, theme: theme,
             onChange: { text in
                 app.file.stage(text)
                 updateStats(for: text, after: .milliseconds(250))
             },
             onCancel: { app.closeScratchpad() }
         )
+        .safeAreaInset(edge: .top, spacing: 0) { banners }
         .safeAreaInset(edge: .bottom, spacing: 0) { footer }
         .onAppear { updateStats(for: app.file.text, after: .zero) }
         .onChange(of: app.copiedAt) { _, _ in flashCopied() }
@@ -27,6 +28,32 @@ struct ScratchpadView: View {
 
     private var theme: MarkdownTheme {
         MarkdownTheme(family: fontFamily, size: CGFloat(fontSize), hidesSyntax: hidesSyntax)
+    }
+
+    @ViewBuilder
+    private var banners: some View {
+        VStack(spacing: 0) {
+            if app.file.isAwaitingDownload {
+                Banner(systemImage: "icloud.and.arrow.down", message: "Downloading your scratchpad from iCloud…")
+            }
+            if let notice = app.storageNotice {
+                Banner(systemImage: "info.circle", message: notice) {
+                    Button("OK") { app.dismissStorageNotice() }
+                }
+            }
+            if let copy = app.file.conflictCopies.last {
+                let count = app.file.conflictCopies.count
+                Banner(
+                    systemImage: "exclamationmark.triangle",
+                    message: count == 1
+                        ? "Another Mac edited at the same time, so its version was kept as “\(copy.lastPathComponent)”."
+                        : "\(count) versions edited at the same time were kept as separate files."
+                ) {
+                    Button("Show") { app.reveal(copy) }
+                    Button("OK") { app.file.dismissConflicts() }
+                }
+            }
+        }
     }
 
     private var footer: some View {
@@ -95,5 +122,35 @@ struct ScratchpadView: View {
             try? await Task.sleep(for: .seconds(1.5))
             withAnimation { showsCopied = false }
         }
+    }
+}
+
+/// A one-line notice above the editor.
+private struct Banner<Actions: View>: View {
+    var systemImage: String
+    var message: String
+    @ViewBuilder var actions: Actions
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.secondary)
+            Text(message)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            actions
+        }
+        .font(.callout)
+        .controlSize(.small)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+    }
+}
+
+extension Banner where Actions == EmptyView {
+    init(systemImage: String, message: String) {
+        self.init(systemImage: systemImage, message: message) { EmptyView() }
     }
 }

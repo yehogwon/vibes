@@ -5,7 +5,12 @@ import SwiftUI
 /// `SettingsView` in a plain window that's created once and reused.
 @MainActor
 final class SettingsWindowController {
+    private let state: AppState
     private var window: NSWindow?
+
+    init(state: AppState) {
+        self.state = state
+    }
 
     func show() {
         let window = self.window ?? makeWindow()
@@ -15,7 +20,7 @@ final class SettingsWindowController {
     }
 
     private func makeWindow() -> NSWindow {
-        let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
+        let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView().environment(state)))
         window.title = "Jots Settings"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
