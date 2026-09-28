@@ -1,9 +1,5 @@
 /build/
 
-# Swift Package Manager (the app and Tools)
+# Swift Package Manager
 .build/
 .swiftpm/
-
-# Personal signing settings (team ID, provisioning profile), see Config/Signing.local.mk.example
-Config/Signing.local.mk
-Config/*.provisionprofile

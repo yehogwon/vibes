@@ -10,7 +10,7 @@ final class AppState {
     enum Storage: Equatable {
         case checking
         case iCloud
-        case local(JotStorage.ICloudStatus)
+        case local
     }
 
     let file: JotFile
@@ -34,12 +34,16 @@ final class AppState {
     @ObservationIgnored var toggleScratchpad: () -> Void = {}
 
     @ObservationIgnored private let localURL = URL.applicationSupportDirectory.appendingPathComponent(
-        JotStorage.fileName)
+        "Jots/\(JotStorage.fileName)")
+    /// Where the sandboxed builds kept the scratchpad.
+    @ObservationIgnored private let sandboxedURL = URL.homeDirectory.appendingPathComponent(
+        "Library/Containers/io.github.yehogwon.Jots/Data/Library/Application Support/\(JotStorage.fileName)")
     @ObservationIgnored private let globalHotKey = GlobalHotKey()
     @ObservationIgnored private var settingsWindow: SettingsWindowController?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     init() {
+        storageNotice = JotStorage.adoptSandboxedFile(from: sandboxedURL, to: localURL)
         file = JotFile(url: localURL)
         // A missing value means "never set" (use the default); an empty one means "turned off".
         if let stored = UserDefaults.standard.string(forKey: SettingsKey.hotKey) {
@@ -75,9 +79,7 @@ final class AppState {
         switch storage {
         case .checking: "Checking iCloud…"
         case .iCloud: "iCloud Drive › Jots"
-        case .local(.signedOut): "On this Mac (sign in to iCloud and turn on iCloud Drive to sync)"
-        case .local(.notEntitled): "On this Mac (this build isn't signed for iCloud)"
-        case .local: "On this Mac"
+        case .local: "On this Mac (sign in to iCloud and turn on iCloud Drive to sync)"
         }
     }
 
@@ -88,12 +90,10 @@ final class AppState {
         file.beginRelocation()
         let localURL = localURL
         Task {
-            let (status, resolution) = await Task.detached(priority: .userInitiated) {
-                let status = JotStorage.iCloudStatus()
-                let resolution = JotStorage.resolve(
-                    localURL: localURL, cloudDocuments: status.documentsURL,
+            let resolution = await Task.detached(priority: .userInitiated) {
+                JotStorage.resolve(
+                    localURL: localURL, cloudFolder: JotStorage.iCloudFolder(),
                     deviceName: Host.current().localizedName ?? "this Mac")
-                return (status, resolution)
             }.value
 
             switch resolution.location {
@@ -103,7 +103,7 @@ final class AppState {
             case .local(let url):
                 // Leaving iCloud: keep working on the text that was there.
                 file.relocate(to: url, carryingText: wasInICloud)
-                storage = .local(status)
+                storage = .local
             }
             if let notice = resolution.notice {
                 storageNotice = notice

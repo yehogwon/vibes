@@ -219,13 +219,9 @@ struct JotFileSyncTests {
 
 @Suite("JotStorage")
 struct JotStorageTests {
-    private func plainMove(_ from: URL, _ to: URL) throws {
-        try FileManager.default.moveItem(at: from, to: to)
-    }
-
     @Test func staysLocalWithoutICloud() throws {
         let directory = try TemporaryDirectory()
-        let resolution = JotStorage.resolve(localURL: directory.file(), cloudDocuments: nil, move: plainMove)
+        let resolution = JotStorage.resolve(localURL: directory.file(), cloudFolder: nil)
         #expect(resolution.location == .local(directory.file()))
         #expect(resolution.notice == nil)
     }
@@ -233,10 +229,10 @@ struct JotStorageTests {
     @Test func movesTheLocalFileIntoICloudTheFirstTime() throws {
         let directory = try TemporaryDirectory()
         let local = directory.file("local.md")
-        let cloud = directory.url.appendingPathComponent("cloud/Documents")
+        let cloud = directory.url.appendingPathComponent("cloud/Jots")
         try "mine".write(to: local, atomically: true, encoding: .utf8)
 
-        let resolution = JotStorage.resolve(localURL: local, cloudDocuments: cloud, move: plainMove)
+        let resolution = JotStorage.resolve(localURL: local, cloudFolder: cloud)
         let cloudFile = cloud.appendingPathComponent("Jots.md")
         #expect(resolution.location == .iCloud(cloudFile))
         #expect(try String(contentsOf: cloudFile, encoding: .utf8) == "mine")
@@ -251,8 +247,7 @@ struct JotStorageTests {
         try "from this mac".write(to: local, atomically: true, encoding: .utf8)
         try "from icloud".write(to: cloud.appendingPathComponent("Jots.md"), atomically: true, encoding: .utf8)
 
-        let resolution = JotStorage.resolve(
-            localURL: local, cloudDocuments: cloud, deviceName: "Studio", move: plainMove)
+        let resolution = JotStorage.resolve(localURL: local, cloudFolder: cloud, deviceName: "Studio")
         #expect(resolution.location == .iCloud(cloud.appendingPathComponent("Jots.md")))
         #expect(resolution.notice != nil)
         let kept = cloud.appendingPathComponent("Jots (from Studio).md")
@@ -268,7 +263,7 @@ struct JotStorageTests {
         try "same".write(to: local, atomically: true, encoding: .utf8)
         try "same".write(to: cloud.appendingPathComponent("Jots.md"), atomically: true, encoding: .utf8)
 
-        let resolution = JotStorage.resolve(localURL: local, cloudDocuments: cloud, move: plainMove)
+        let resolution = JotStorage.resolve(localURL: local, cloudFolder: cloud)
         #expect(resolution.notice == nil)
         #expect(!FileManager.default.fileExists(atPath: local.path))
         #expect(try FileManager.default.contentsOfDirectory(atPath: cloud.path) == ["Jots.md"])
@@ -281,10 +276,33 @@ struct JotStorageTests {
         struct MoveFailed: Error {}
 
         let resolution = JotStorage.resolve(
-            localURL: local, cloudDocuments: directory.url.appendingPathComponent("cloud"),
+            localURL: local, cloudFolder: directory.url.appendingPathComponent("cloud"),
             move: { _, _ in throw MoveFailed() })
         #expect(resolution.location == .local(local))
         #expect(resolution.notice != nil)
         #expect(try String(contentsOf: local, encoding: .utf8) == "mine")
+    }
+
+    @Test func adoptsTheSandboxedFile() throws {
+        let directory = try TemporaryDirectory()
+        let old = directory.file("old.md")
+        let local = directory.url.appendingPathComponent("Application Support/Jots/Jots.md")
+        try "from the sandbox".write(to: old, atomically: true, encoding: .utf8)
+
+        #expect(JotStorage.adoptSandboxedFile(from: old, to: local) == nil)
+        #expect(try String(contentsOf: local, encoding: .utf8) == "from the sandbox")
+        #expect(!FileManager.default.fileExists(atPath: old.path))
+    }
+
+    @Test func leavesTheSandboxedFileWhenALocalOneExists() throws {
+        let directory = try TemporaryDirectory()
+        let old = directory.file("old.md")
+        let local = directory.file("local.md")
+        try "from the sandbox".write(to: old, atomically: true, encoding: .utf8)
+        try "already here".write(to: local, atomically: true, encoding: .utf8)
+
+        #expect(JotStorage.adoptSandboxedFile(from: old, to: local) == nil)
+        #expect(try String(contentsOf: local, encoding: .utf8) == "already here")
+        #expect(try String(contentsOf: old, encoding: .utf8) == "from the sandbox")
     }
 }

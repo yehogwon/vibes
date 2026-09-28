@@ -1,13 +1,14 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 
-// The app builds with SwiftPM alone, so Xcode isn't needed. `make build` compiles the `Jots`
-// executable and wraps it into Jots.app (see the Makefile).
+// The app builds with SwiftPM: `./build.sh` compiles the `Jots` executable and wraps it into
+// Jots.app. Xcode has to be installed, since the Command Line Tools lack SwiftUI's macro plugin,
+// but it never opens.
 
 import PackageDescription
 
 let package = Package(
     name: "Jots",
-    platforms: [.macOS(.v15)],
+    platforms: [.macOS(.v26)],
     products: [
         .executable(name: "Jots", targets: ["Jots"]),
         .library(name: "JotsCore", targets: ["JotsCore"]),

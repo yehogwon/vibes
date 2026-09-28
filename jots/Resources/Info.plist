@@ -25,22 +25,10 @@
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>15.0</string>
+	<string>26.0</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<key>NSUbiquitousContainers</key>
-	<dict>
-		<key>iCloud.io.github.yehogwon.Jots</key>
-		<dict>
-			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
-			<true/>
-			<key>NSUbiquitousContainerName</key>
-			<string>Jots</string>
-			<key>NSUbiquitousContainerSupportedFolderLevels</key>
-			<string>None</string>
-		</dict>
-	</dict>
 </dict>
 </plist>

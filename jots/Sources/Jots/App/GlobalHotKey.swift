@@ -66,7 +66,7 @@ struct HotKeyShortcut: Equatable, RawRepresentable {
 }
 
 /// Registers one system-wide shortcut with the Carbon Event Manager, which is still the only
-/// public API for global hotkeys that works in the sandbox without Accessibility permission.
+/// public API for global hotkeys that needs no Accessibility permission.
 @MainActor
 final class GlobalHotKey {
     var action: () -> Void = {}

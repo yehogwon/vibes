@@ -1,7 +1,10 @@
 import Foundation
 
-/// Decides where the scratchpad lives: the app's iCloud Drive folder when iCloud is available,
+/// Decides where the scratchpad lives: a Jots folder in iCloud Drive when iCloud Drive is on,
 /// otherwise a local file.
+///
+/// iCloud Drive syncs whatever is in its folder, so the app writes there directly instead of
+/// through an iCloud container, which would need the app to be signed with iCloud entitlements.
 public enum JotStorage {
     public static let fileName = "Jots.md"
 
@@ -22,28 +25,30 @@ public enum JotStorage {
         public var notice: String?
     }
 
-    public enum ICloudStatus: Equatable, Sendable {
-        /// The `Documents` folder of the app's iCloud container.
-        case available(URL)
-        /// Not signed in to iCloud, or iCloud Drive is off.
-        case signedOut
-        /// This build isn't signed with the iCloud entitlement.
-        case notEntitled
-
-        public var documentsURL: URL? {
-            if case .available(let url) = self { url } else { nil }
-        }
+    /// The Jots folder in iCloud Drive, or `nil` when iCloud Drive is off or no one is signed in.
+    public static func iCloudFolder() -> URL? {
+        guard FileManager.default.ubiquityIdentityToken != nil else { return nil }
+        let drive = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+            "Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: drive.path) else { return nil }
+        return drive.appendingPathComponent("Jots", isDirectory: true)
     }
 
-    /// Whether the app can use iCloud Drive right now.
-    ///
-    /// This can block while the container is set up; don't call it on the main thread.
-    public static func iCloudStatus() -> ICloudStatus {
-        guard FileManager.default.ubiquityIdentityToken != nil else { return .signedOut }
-        guard let container = FileManager.default.url(forUbiquityContainerIdentifier: nil) else {
-            return .notEntitled
+    /// Moves the scratchpad out of the folder the sandboxed builds kept it in, the first time an
+    /// unsandboxed build runs. Returns a message if the move failed, so the text isn't silently
+    /// left behind.
+    public static func adoptSandboxedFile(from oldURL: URL, to localURL: URL) -> String? {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: oldURL.path), !fileManager.fileExists(atPath: localURL.path) else {
+            return nil
         }
-        return .available(container.appendingPathComponent("Documents", isDirectory: true))
+        do {
+            try fileManager.createDirectory(at: localURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fileManager.moveItem(at: oldURL, to: localURL)
+            return nil
+        } catch {
+            return "Couldn't move your scratchpad from \(oldURL.path): \(error.localizedDescription)"
+        }
     }
 
     /// Picks the scratchpad's location and, the first time iCloud is available, moves the local
@@ -51,28 +56,25 @@ public enum JotStorage {
     /// version is kept next to the iCloud one.
     ///
     /// - Parameters:
-    ///   - cloudDocuments: Where iCloud files go, from ``iCloudStatus()``.
-    ///   - move: Moves a file into iCloud. Defaults to `FileManager.setUbiquitous`; tests
-    ///     substitute a plain move.
+    ///   - cloudFolder: Where the scratchpad goes in iCloud Drive, from ``iCloudFolder()``.
+    ///   - move: Moves a file into iCloud. Tests substitute one that fails.
     public static func resolve(
         localURL: URL,
-        cloudDocuments: URL?,
+        cloudFolder: URL?,
         deviceName: String = "this Mac",
-        move: (URL, URL) throws -> Void = {
-            try FileManager.default.setUbiquitous(true, itemAt: $0, destinationURL: $1)
-        }
+        move: (URL, URL) throws -> Void = { try FileManager.default.moveItem(at: $0, to: $1) }
     ) -> Resolution {
-        guard let cloudDocuments else {
+        guard let cloudFolder else {
             return Resolution(location: .local(localURL))
         }
-        let cloudURL = cloudDocuments.appendingPathComponent(fileName)
+        let cloudURL = cloudFolder.appendingPathComponent(fileName)
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: localURL.path) else {
             return Resolution(location: .iCloud(cloudURL))
         }
 
         do {
-            try fileManager.createDirectory(at: cloudDocuments, withIntermediateDirectories: true)
+            try fileManager.createDirectory(at: cloudFolder, withIntermediateDirectories: true)
             let cloudExists = fileManager.fileExists(atPath: cloudURL.path) || Cloud.isNotDownloaded(cloudURL)
             if !cloudExists {
                 try move(localURL, cloudURL)
@@ -84,7 +86,7 @@ public enum JotStorage {
                 return Resolution(location: .iCloud(cloudURL))
             }
             let keptName = "Jots (from \(deviceName)).md"
-            let kept = uniqueURL(cloudDocuments.appendingPathComponent(keptName))
+            let kept = uniqueURL(cloudFolder.appendingPathComponent(keptName))
             try move(localURL, kept)
             return Resolution(
                 location: .iCloud(cloudURL),
