@@ -8,7 +8,7 @@ import PackageDescription
 
 let package = Package(
     name: "Jots",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v14)],
     products: [
         .executable(name: "Jots", targets: ["Jots"]),
         .library(name: "JotsCore", targets: ["JotsCore"]),
