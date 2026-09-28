@@ -1,0 +1,119 @@
+name: Jots release
+
+# Publishes Jots from main, so bumping CFBundleShortVersionString in jots/Resources/Info.plist is
+# all a release takes. If there's no jots-v<version> release for that version yet, this builds
+# Jots.app and attaches it to a new one. Either way it then writes the cask (jots/cask.sh) for that
+# release into yehogwon/homebrew-vibes, which `brew install --cask yehogwon/vibes/jots` reads. A push
+# that changes neither the version nor the cask finds both up to date and stops there.
+#
+# Pushing to the tap takes a deploy key with write access to yehogwon/homebrew-vibes, whose private
+# half is this repository's HOMEBREW_TAP_DEPLOY_KEY secret.
+on:
+  push:
+    branches: [main]
+    paths:
+      - jots/**
+      - .github/workflows/jots-release.yml
+  workflow_dispatch:
+
+# One at a time, and never cancelled halfway through a release.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+# The app builds with SwiftPM, but needs Xcode's toolchain: the Command Line Tools lack SwiftUI's
+# macro plugin.
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+  HOMEBREW_NO_AUTO_UPDATE: 1
+
+jobs:
+  publish:
+    name: Publish
+    # workflow_dispatch can run from any branch, but only main is released.
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Read version
+        id: version
+        run: |
+          version="$(plutil -extract CFBundleShortVersionString raw jots/Resources/Info.plist)"
+          {
+            echo "VERSION=$version"
+            echo "TAG=jots-v$version"
+            echo "ZIP=Jots-$version.zip"
+          } >> "$GITHUB_ENV"
+          if gh release view "jots-v$version" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Jots $version is already released."
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        if: steps.version.outputs.released == 'false'
+        run: jots/build.sh
+
+      - name: Test
+        if: steps.version.outputs.released == 'false'
+        run: swift test --package-path jots
+
+      - name: Release
+        if: steps.version.outputs.released == 'false'
+        run: |
+          ditto -c -k --keepParent jots/build/Jots.app "$RUNNER_TEMP/$ZIP"
+          gh release create "$TAG" "$RUNNER_TEMP/$ZIP" -R "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "Jots $VERSION" \
+            --notes 'Install with `brew install --cask yehogwon/vibes/jots`.'
+
+      - name: Check out the tap
+        uses: actions/checkout@v7
+        with:
+          repository: yehogwon/homebrew-vibes
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          path: tap
+
+      # The checksum comes from the published zip, so the cask matches what Homebrew downloads.
+      - name: Write the cask
+        id: cask
+        run: |
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "$ZIP" -D "$RUNNER_TEMP/download"
+          sha256="$(shasum -a 256 "$RUNNER_TEMP/download/$ZIP" | cut -d ' ' -f 1)"
+          mkdir -p tap/Casks
+          jots/cask.sh "$VERSION" "$sha256" > tap/Casks/jots.rb
+          git -C tap add Casks/jots.rb
+          if git -C tap diff --cached --quiet; then
+            echo "The cask is up to date."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Audit the cask
+        if: steps.cask.outputs.changed == 'true'
+        run: |
+          mkdir -p "$(brew --repository)/Library/Taps/yehogwon"
+          ln -s "$PWD/tap" "$(brew --repository)/Library/Taps/yehogwon/homebrew-vibes"
+          brew style yehogwon/vibes/jots
+          brew audit --cask --strict yehogwon/vibes/jots
+
+      - name: Push the cask
+        if: steps.cask.outputs.changed == 'true'
+        working-directory: tap
+        run: |
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "Jots $VERSION" -m "From yehogwon/vibes@$GITHUB_SHA"
+          git push origin HEAD
