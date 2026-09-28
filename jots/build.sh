@@ -37,10 +37,7 @@ if [ "$PACKAGE_MIN_MACOS" != "$MIN_MACOS" ]; then
 fi
 SDK="$(xcrun --show-sdk-version)"
 
-# SwiftPM tells the linker the SDK is as old as the deployment target, and newer macOS then runs the
-# app in compatibility mode, without its current look. So the real SDK version is passed on.
-BUILD=(-c "$CONFIG" --product Jots
-  -Xlinker -platform_version -Xlinker macos -Xlinker "$MIN_MACOS" -Xlinker "$SDK")
+BUILD=(-c "$CONFIG" --product Jots)
 # Release builds also run on Intel Macs.
 if [ "$CONFIG" = release ]; then
   BUILD+=(--arch arm64 --arch x86_64)
@@ -49,17 +46,6 @@ fi
 echo "==> Compiling ($CONFIG)"
 swift build "${BUILD[@]}"
 BIN="$(swift build "${BUILD[@]}" --show-bin-path)/Jots"
-
-# Every slice has to say what the flags above asked for, or the app would refuse to open on older
-# macOS, or look dated on newer.
-echo "==> Checking the binary"
-MINOS="$(vtool -show-build "$BIN" | awk '$1 == "minos" { print $2 }' | sort -u)"
-BUILT_SDK="$(vtool -show-build "$BIN" | awk '$1 == "sdk" { print $2 }' | sort -u)"
-if [ "$MINOS" != "$MIN_MACOS" ] || [ "$BUILT_SDK" != "$SDK" ]; then
-  echo "Jots is built for macOS $MINOS with SDK $BUILT_SDK, not macOS $MIN_MACOS with SDK $SDK." >&2
-  exit 1
-fi
-echo "    $(lipo -archs "$BIN"), macOS $MINOS and later, SDK $BUILT_SDK"
 
 # The icon only changes when its script does, so it's drawn again only then.
 if [ Tools/MakeIcon.swift -nt "$ICON" ]; then
@@ -71,10 +57,25 @@ fi
 echo "==> Assembling bundle"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/Jots"
+# SwiftPM tells the linker the SDK is as old as the deployment target, and newer macOS then runs the
+# app in compatibility mode, without its current look. So the real SDK version is written in here.
+# (Passing it to the linker instead breaks with some SwiftPM versions, which hand -Xlinker flags to
+# clang as they are.)
+vtool -set-build-version macos "$MIN_MACOS" "$SDK" -replace -output "$APP/Contents/MacOS/Jots" "$BIN"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
+
+# Every slice has to say what was asked for above, or the app would refuse to open on older macOS,
+# or look dated on newer.
+echo "==> Checking the binary"
+MINOS="$(vtool -show-build "$APP/Contents/MacOS/Jots" | awk '$1 == "minos" { print $2 }' | sort -u)"
+BUILT_SDK="$(vtool -show-build "$APP/Contents/MacOS/Jots" | awk '$1 == "sdk" { print $2 }' | sort -u)"
+if [ "$MINOS" != "$MIN_MACOS" ] || [ "$BUILT_SDK" != "$SDK" ]; then
+  echo "Jots is built for macOS $MINOS with SDK $BUILT_SDK, not macOS $MIN_MACOS with SDK $SDK." >&2
+  exit 1
+fi
+echo "    $(lipo -archs "$APP/Contents/MacOS/Jots"), macOS $MINOS and later, SDK $BUILT_SDK"
 
 echo "==> Signing (ad hoc)"
 codesign --force --sign - "$APP"
