@@ -29,6 +29,14 @@ cask "jots" do
 
   app "Jots.app"
 
+  # Jots is signed ad hoc and can't be notarized, so Gatekeeper would block it after every install
+  # and upgrade. This can't be postflight_steps, as brew style's Cask/InstallSteps wants: those run
+  # sandboxed, and macOS won't let a sandboxed process clear the quarantine flag.
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Jots.app"]
+  end
+
   uninstall quit: "io.github.yehogwon.Jots"
 
   # The iCloud Drive › Jots folder is left alone: deleting it would delete the text on every Mac.
@@ -39,8 +47,8 @@ cask "jots" do
   ]
 
   caveats <<~EOS
-    Jots is signed ad hoc, not notarized, so macOS blocks it the first time it opens. Allow it
-    under System Settings › Privacy & Security › Open Anyway.
+    Jots is signed ad hoc, not notarized, so this cask clears its quarantine flag and macOS
+    opens it without a Gatekeeper check.
   EOS
 end
 EOF
