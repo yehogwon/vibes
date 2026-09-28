@@ -72,8 +72,7 @@ struct JotFileTests {
         let file = JotFile(url: directory.file())
         file.saveDelay = .milliseconds(10)
         file.stage("later")
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(try String(contentsOf: directory.file(), encoding: .utf8) == "later")
+        #expect(await eventually { (try? String(contentsOf: directory.file(), encoding: .utf8)) == "later" })
     }
 
     @Test func unchangedTextIsNotRewritten() throws {
@@ -188,6 +187,45 @@ struct JotFileSyncTests {
         #expect(try String(contentsOf: directory.file(), encoding: .utf8) == "typed here")
         let copy = try #require(file.conflictCopies.first)
         #expect(copy.lastPathComponent.hasPrefix("Jots (conflict "))
+        #expect(try String(contentsOf: copy, encoding: .utf8) == "typed elsewhere")
+    }
+
+    @Test func saveRightAfterAChangeElsewhereKeepsBothVersions() async throws {
+        let directory = try TemporaryDirectory()
+        try "base".write(to: directory.file(), atomically: true, encoding: .utf8)
+        let file = JotFile(url: directory.file())
+        file.saveDelay = .seconds(60)
+        file.stage("typed here")
+
+        // The save happens before the change notification is handled.
+        try writeFromElsewhere("typed elsewhere", to: directory.file())
+        file.flush()
+        try await Task.sleep(for: .milliseconds(500))
+
+        #expect(try String(contentsOf: directory.file(), encoding: .utf8) == "typed here")
+        #expect(file.text == "typed here")
+        let copy = try #require(file.conflictCopies.first)
+        #expect(try String(contentsOf: copy, encoding: .utf8) == "typed elsewhere")
+    }
+
+    @Test func changeReadBeforeASaveDoesNotReplaceTheSavedText() async throws {
+        let directory = try TemporaryDirectory()
+        try "base".write(to: directory.file(), atomically: true, encoding: .utf8)
+        let file = JotFile(url: directory.file())
+        file.saveDelay = .seconds(60)
+        file.stage("typed here")
+
+        // Change notifications arrive a few hundred milliseconds after the write. Blocking the main
+        // actor for a second makes the presenter read the change before the save, but its
+        // notification is only handled after it.
+        try writeFromElsewhere("typed elsewhere", to: directory.file())
+        usleep(1_000_000)
+        file.flush()
+        try await Task.sleep(for: .milliseconds(500))
+
+        #expect(try String(contentsOf: directory.file(), encoding: .utf8) == "typed here")
+        #expect(file.text == "typed here")
+        let copy = try #require(file.conflictCopies.first)
         #expect(try String(contentsOf: copy, encoding: .utf8) == "typed elsewhere")
     }
 

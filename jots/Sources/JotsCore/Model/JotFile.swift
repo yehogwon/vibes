@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import Synchronization
 
 /// The scratchpad: one Markdown file on disk, possibly in iCloud Drive.
 ///
@@ -31,6 +32,7 @@ public final class JotFile {
     @ObservationIgnored private var pending: String?
     @ObservationIgnored private var flushTask: Task<Void, Never>?
     @ObservationIgnored private var presenter: FilePresenter?
+    private let writes = WriteCounter()
 
     /// Opens the file at `url`, or starts empty if it doesn't exist yet. The file itself is
     /// only created on the first save.
@@ -72,15 +74,21 @@ public final class JotFile {
         do {
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Coordinated.write(text, to: url, presenter: presenter)
+            // Text on disk other than what was last read or written changed elsewhere, and its
+            // notification hasn't been handled yet. It's kept beside the file, not overwritten.
+            let copy = try Coordinated.replace(url, with: text, expecting: savedText, presenter: presenter)
             savedText = text
             lastError = nil
+            if let copy {
+                conflictCopies.append(copy)
+            }
         } catch {
             // Keep the text staged so the next flush retries instead of dropping it.
             pending = text
             SuddenTermination.disable()
             lastError = "Couldn't save \(url.lastPathComponent): \(error.localizedDescription)"
         }
+        writes.increment()
     }
 
     /// Saves pending edits and pauses editing until ``relocate(to:carryingText:)`` finishes the
@@ -139,7 +147,11 @@ public final class JotFile {
     }
 
     /// Called when the file changed somewhere else and has been read again.
-    fileprivate func presentedTextChanged(_ newText: String) {
+    ///
+    /// - Parameter generation: The save count when the text was read. If this file has saved
+    ///   since, the text is out of date, and that save kept it as a conflict copy if it differed.
+    fileprivate func presentedTextChanged(_ newText: String, readAt generation: Int) {
+        guard generation == writes.value else { return }
         let wasAwaitingDownload = isAwaitingDownload
         isAwaitingDownload = false
         guard newText != savedText || wasAwaitingDownload else { return }
@@ -183,7 +195,7 @@ public final class JotFile {
     // MARK: - Presenting
 
     private func startPresenting() {
-        let presenter = FilePresenter(url: url, file: self)
+        let presenter = FilePresenter(url: url, file: self, writes: writes)
         NSFileCoordinator.addFilePresenter(presenter)
         self.presenter = presenter
     }
@@ -248,11 +260,13 @@ private final class FilePresenter: NSObject, NSFilePresenter, @unchecked Sendabl
     private(set) var presentedItemURL: URL?
     let presentedItemOperationQueue: OperationQueue
     private weak var file: JotFile?
+    private let writes: WriteCounter
 
     @MainActor
-    init(url: URL, file: JotFile) {
+    init(url: URL, file: JotFile, writes: WriteCounter) {
         presentedItemURL = url
         self.file = file
+        self.writes = writes
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 1
         queue.name = "Jots file presenter"
@@ -262,12 +276,14 @@ private final class FilePresenter: NSObject, NSFilePresenter, @unchecked Sendabl
     func presentedItemDidChange() {
         guard let url = presentedItemURL else { return }
         let keptCopies = resolveConflicts(at: url)
+        // Noted before reading, so a save that lands after the read shows up as a newer count.
+        let generation = writes.value
         guard let text = try? Coordinated.read(url, presenter: self) else { return }
         Task { @MainActor [weak file] in
             for copy in keptCopies {
                 file?.presentedConflictKept(copy)
             }
-            file?.presentedTextChanged(text)
+            file?.presentedTextChanged(text, readAt: generation)
         }
     }
 
@@ -331,6 +347,31 @@ private enum Coordinated {
         return try result.get()
     }
 
+    /// Writes `text` to `url`. If the file doesn't hold `expected`, what it holds is first kept as
+    /// a conflict copy, which is returned.
+    static func replace(_ url: URL, with text: String, expecting expected: String, presenter: NSFilePresenter?)
+        throws -> URL?
+    {
+        var coordinationError: NSError?
+        var result: Result<URL?, Error> = .success(nil)
+        NSFileCoordinator(filePresenter: presenter).coordinate(
+            writingItemAt: url, options: .forMerging, error: &coordinationError
+        ) { writeURL in
+            result = Result {
+                var copy: URL?
+                if let onDisk = try? String(contentsOf: writeURL, encoding: .utf8), onDisk != expected, onDisk != text {
+                    let conflict = JotFile.conflictURL(for: url)
+                    try onDisk.write(to: conflict, atomically: true, encoding: .utf8)
+                    copy = conflict
+                }
+                try text.write(to: writeURL, atomically: true, encoding: .utf8)
+                return copy
+            }
+        }
+        if let coordinationError { throw coordinationError }
+        return try result.get()
+    }
+
     static func write(_ text: String, to url: URL, presenter: NSFilePresenter?) throws {
         var coordinationError: NSError?
         var result: Result<Void, Error> = .success(())
@@ -359,6 +400,18 @@ enum Cloud {
 
     static func startDownloading(_ url: URL) {
         try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+    }
+}
+
+/// Counts a file's own saves. A change notification notes the count before reading the file, so a
+/// save in between marks the text it read as out of date.
+private final class WriteCounter: Sendable {
+    private let count = Atomic<Int>(0)
+
+    var value: Int { count.load(ordering: .sequentiallyConsistent) }
+
+    func increment() {
+        count.wrappingAdd(1, ordering: .sequentiallyConsistent)
     }
 }
 
