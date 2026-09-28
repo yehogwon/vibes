@@ -106,7 +106,9 @@ jobs:
         run: |
           mkdir -p "$(brew --repository)/Library/Taps/yehogwon"
           ln -s "$PWD/tap" "$(brew --repository)/Library/Taps/yehogwon/homebrew-vibes"
-          brew style yehogwon/vibes/jots
+          # The cask clears quarantine in a postflight block, which Cask/InstallSteps rejects; the
+          # cask explains why it can't be postflight_steps.
+          brew style --except-cops Cask/InstallSteps yehogwon/vibes/jots
           brew audit --cask --strict yehogwon/vibes/jots
 
       - name: Push the cask
