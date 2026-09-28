@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import Synchronization
+import os
 
 /// The scratchpad: one Markdown file on disk, possibly in iCloud Drive.
 ///
@@ -405,13 +405,15 @@ enum Cloud {
 
 /// Counts a file's own saves. A change notification notes the count before reading the file, so a
 /// save in between marks the text it read as out of date.
+///
+/// A lock rather than `Atomic`, which needs macOS 15.
 private final class WriteCounter: Sendable {
-    private let count = Atomic<Int>(0)
+    private let count = OSAllocatedUnfairLock(initialState: 0)
 
-    var value: Int { count.load(ordering: .sequentiallyConsistent) }
+    var value: Int { count.withLock { $0 } }
 
     func increment() {
-        count.wrappingAdd(1, ordering: .sequentiallyConsistent)
+        count.withLock { $0 &+= 1 }
     }
 }
 
