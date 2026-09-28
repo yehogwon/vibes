@@ -37,3 +37,59 @@ jobs:
 
       - name: Test
         run: swift test --package-path jots
+
+      # Zipped with ditto first: upload-artifact drops the executable bit.
+      - name: Package
+        run: ditto -c -k --keepParent jots/build/Jots.app "$RUNNER_TEMP/Jots.zip"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Jots
+          path: ${{ runner.temp }}/Jots.zip
+          retention-days: 1
+
+  # Jots is built on the newest macOS but runs back to LSMinimumSystemVersion, so the app built above
+  # is opened on older macOS too. The macOS 14 runners have no Xcode that can build the package, so
+  # only the macOS 15 ones run the tests.
+  compatibility:
+    name: macOS ${{ matrix.macos }}
+    needs: build-test
+    runs-on: macos-${{ matrix.macos }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - macos: 14
+          - macos: 15
+            xcode: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: Jots
+          path: ${{ runner.temp }}
+
+      - name: Open Jots
+        run: |
+          ditto -x -k "$RUNNER_TEMP/Jots.zip" "$RUNNER_TEMP"
+          "$RUNNER_TEMP/Jots.app/Contents/MacOS/Jots" > "$RUNNER_TEMP/jots.log" 2>&1 &
+          pid=$!
+          sleep 10
+          if ! kill -0 "$pid" 2>/dev/null; then
+            echo "Jots quit within 10 seconds of opening:" >&2
+            cat "$RUNNER_TEMP/jots.log" >&2
+            exit 1
+          fi
+          kill "$pid"
+          echo "Jots was still running after 10 seconds."
+
+      - uses: actions/checkout@v7
+        if: matrix.xcode
+        with:
+          persist-credentials: false
+
+      - name: Test
+        if: matrix.xcode
+        env:
+          DEVELOPER_DIR: ${{ matrix.xcode }}
+        run: swift test --package-path jots
