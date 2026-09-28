@@ -1,1 +1,2 @@
 - Never edit README unless the user explicitly asks you to do so.
+- Jots ships through Homebrew: merging a bump of `CFBundleShortVersionString` in `jots/Resources/Info.plist` into main releases it, and the cask comes from `jots/cask.sh` (never edit it in `yehogwon/homebrew-vibes`), whose quarantine-clearing `postflight` must not become `postflight_steps`.
