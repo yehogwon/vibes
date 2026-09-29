@@ -19,7 +19,7 @@ public struct Moment: Identifiable, Hashable, Sendable {
     /// The day a date or birthday is about. Stored as the instant that day starts where it was
     /// picked, like the original app does.
     public var date: Date
-    /// Where a custom progress span starts and ends.
+    /// The first and last days of a custom progress span.
     public var startDate: Date
     public var endDate: Date
     /// What a progress moment shows progress through.
@@ -34,11 +34,19 @@ public struct Moment: Identifiable, Hashable, Sendable {
     /// Position in the list, smallest first.
     public var sortWeight: Int
     public var createdAt: Date
-    /// When anything about the moment last changed. Syncing uses it to tell which of two versions
-    /// is newer.
+    /// When anything about the moment last changed.
     public var updatedAt: Date
+    /// When each field last changed, for fields changed since the moment was created (see
+    /// ``stamp(of:)``). It's what lets two Macs' edits to different fields of one moment both
+    /// survive a sync. Written as `fieldUpdatedAt`, and only once a field has changed, so moments
+    /// this app never edits stay exactly as the original app wrote them.
+    public var fieldUpdatedAt: [String: Date] = [:]
     /// Keys from another app or a newer version, written back unchanged.
     public var extras: [String: JSONValue]
+    /// Known keys whose value wasn't of the expected type, e.g. `"inMenubar" : 1`. They're
+    /// written back as they were, rather than as the default that stood in for them, until the
+    /// field is edited.
+    var unparsed: [String: JSONValue] = [:]
 
     public init(
         id: UUID = UUID(),
@@ -89,13 +97,7 @@ public struct Moment: Identifiable, Hashable, Sendable {
         endDate = endDate.wholeSeconds
         createdAt = createdAt.wholeSeconds
         updatedAt = updatedAt.wholeSeconds
-    }
-
-    /// Whether everything but `updatedAt` matches, i.e. saving `other` over this changes nothing.
-    public func hasSameContent(as other: Moment) -> Bool {
-        var other = other
-        other.updatedAt = updatedAt
-        return self == other
+        fieldUpdatedAt = fieldUpdatedAt.mapValues(\.wholeSeconds)
     }
 }
 
@@ -181,28 +183,53 @@ extension Moment: Codable {
 
     private static let knownKeys: Set<String> = [
         "id", "kind", "name", "emoji", "imageData", "color", "date", "startDate", "endDate", "span", "unit",
-        "repeatCycle", "remindDays", "inMenubar", "sortWeight", "createdAt", "updatedAt",
+        "repeatCycle", "remindDays", "inMenubar", "sortWeight", "createdAt", "updatedAt", "fieldUpdatedAt",
     ]
 
-    /// Reads a moment leniently: a missing or odd field falls back to a default instead of
-    /// failing, since the file may come from another app. Only a missing `id` is an error.
+    /// Reads a moment leniently, since the file may come from another app: a missing field
+    /// falls back to a default, and one of an unexpected type is kept as it was (see
+    /// `unparsed`). Only a missing `id` is an error.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: Key.self)
-        func decode<T: Decodable>(_ type: T.Type, _ key: String) -> T? {
-            try? container.decodeIfPresent(type, forKey: Key(key))
+        var unparsed: [String: JSONValue] = [:]
+        /// The value of `key` as `parse` reads it, or `nil` if it's missing or `parse` can't.
+        func read<T>(_ key: String, _ parse: (JSONValue) -> T?) -> T? {
+            guard container.contains(Key(key)) else { return nil }
+            // `decodeIfPresent` would take null for a missing key.
+            let raw = (try? container.decodeNil(forKey: Key(key))) == true
+                ? JSONValue.null : (try? container.decode(JSONValue.self, forKey: Key(key)))
+            guard let raw else { return nil }
+            if let value = parse(raw) {
+                return value
+            }
+            unparsed[key] = raw
+            return nil
+        }
+        func string(_ key: String) -> String? {
+            read(key) { if case .string(let value) = $0 { value } else { nil } }
         }
         func int(_ key: String) -> Int? {
-            decode(Int.self, key) ?? decode(Double.self, key).map { Int($0) }
+            read(key) { raw in
+                switch raw {
+                case .integer(let value): Int(exactly: value)
+                case .number(let value): Int(exactly: value)
+                default: nil
+                }
+            }
         }
         func date(_ key: String) -> Date? {
-            if let string = decode(String.self, key) {
-                return ISODate.parse(string)
+            read(key) { raw in
+                switch raw {
+                case .string(let value): ISODate.parse(value)
+                // JSONEncoder's default date strategy: seconds since 2001.
+                case .number(let value): Date(timeIntervalSinceReferenceDate: value)
+                case .integer(let value): Date(timeIntervalSinceReferenceDate: TimeInterval(value))
+                default: nil
+                }
             }
-            // JSONEncoder's default date strategy: seconds since 2001.
-            return decode(Double.self, key).map(Date.init(timeIntervalSinceReferenceDate:))
         }
 
-        guard let id = decode(String.self, "id").flatMap(UUID.init(uuidString:)) else {
+        guard let id = string("id").flatMap(UUID.init(uuidString:)) else {
             throw DecodingError.dataCorrupted(
                 DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "A moment has no valid id."))
         }
@@ -210,13 +237,27 @@ extension Moment: Codable {
         // the same way.
         let updatedAt = date("updatedAt")
         let createdAt = date("createdAt") ?? updatedAt ?? Date(timeIntervalSince1970: 0)
-        let day = date("date") ?? createdAt
-        let color: String =
-            if let object = decode([String: JSONValue].self, "color"), case .string(let hex)? = object["hex"] {
-                hex
-            } else {
-                decode(String.self, "color") ?? ""
+        // Anything but {"hex": "…"} is kept whole, so keys beside "hex" aren't lost.
+        let hex = read("color") { raw -> String? in
+            guard case .object(let object) = raw, object.count == 1, case .string(let hex)? = object["hex"] else {
+                return nil
             }
+            return hex
+        }
+        let colorHex: String =
+            switch unparsed["color"] {
+            case .object(let object)?: if case .string(let hex)? = object["hex"] { hex } else { "" }
+            case .string(let hex)?: hex
+            default: hex ?? ""
+            }
+        let fieldUpdatedAt = read("fieldUpdatedAt") { raw -> [String: Date]? in
+            guard case .object(let object) = raw else { return nil }
+            return object.reduce(into: [:]) { result, entry in
+                if case .string(let value) = entry.value, let date = ISODate.parse(value) {
+                    result[entry.key] = date
+                }
+            }
+        }
 
         var extras: [String: JSONValue] = [:]
         for key in container.allKeys where !Self.knownKeys.contains(key.stringValue) {
@@ -225,48 +266,67 @@ extension Moment: Codable {
 
         self.init(
             id: id,
-            kind: Kind(rawValue: decode(String.self, "kind") ?? Kind.date.rawValue),
-            name: decode(String.self, "name") ?? "",
-            emoji: decode(String.self, "emoji") ?? "",
-            imageData: decode(String.self, "imageData").flatMap { Data(base64Encoded: $0) },
-            colorHex: color,
-            date: day,
+            kind: Kind(rawValue: string("kind") ?? Kind.date.rawValue),
+            name: string("name") ?? "",
+            emoji: string("emoji") ?? "",
+            imageData: read("imageData") { if case .string(let value) = $0 { Data(base64Encoded: value) } else { nil } },
+            colorHex: colorHex,
+            date: date("date") ?? createdAt,
             startDate: date("startDate"),
             endDate: date("endDate"),
-            span: Span(rawValue: decode(String.self, "span") ?? Span.year.rawValue),
-            unit: Unit(rawValue: decode(String.self, "unit") ?? Unit.day.rawValue),
-            repeatCycle: RepeatCycle(rawValue: decode(String.self, "repeatCycle") ?? RepeatCycle.none.rawValue),
+            span: Span(rawValue: string("span") ?? Span.year.rawValue),
+            unit: Unit(rawValue: string("unit") ?? Unit.day.rawValue),
+            repeatCycle: RepeatCycle(rawValue: string("repeatCycle") ?? RepeatCycle.none.rawValue),
             remindDays: int("remindDays") ?? -1,
-            inMenubar: decode(Bool.self, "inMenubar") ?? false,
+            inMenubar: read("inMenubar") { if case .bool(let value) = $0 { value } else { nil } } ?? false,
             sortWeight: int("sortWeight") ?? 0,
             createdAt: createdAt,
             updatedAt: updatedAt ?? createdAt,
             extras: extras)
+        self.fieldUpdatedAt = (fieldUpdatedAt ?? [:]).mapValues(\.wholeSeconds)
+        // The id and the timestamps are this app's to keep straight, so an odd one isn't kept.
+        for key in ["id", "createdAt", "updatedAt", "fieldUpdatedAt"] {
+            unparsed[key] = nil
+        }
+        self.unparsed = unparsed
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: Key.self)
+        /// Writes `value`, or what the file had if that couldn't be read.
+        func put<T: Encodable>(_ key: String, _ value: T) throws {
+            if let raw = unparsed[key] {
+                try container.encode(raw, forKey: Key(key))
+            } else {
+                try container.encode(value, forKey: Key(key))
+            }
+        }
         for (key, value) in extras {
             try container.encode(value, forKey: Key(key))
         }
-        try container.encode(["hex": colorHex], forKey: "color")
+        try put("color", ["hex": colorHex])
         try container.encode(ISODate.string(createdAt), forKey: "createdAt")
-        try container.encode(ISODate.string(date), forKey: "date")
-        try container.encode(emoji, forKey: "emoji")
-        try container.encode(ISODate.string(endDate), forKey: "endDate")
+        try put("date", ISODate.string(date))
+        try put("emoji", emoji)
+        try put("endDate", ISODate.string(endDate))
+        if !fieldUpdatedAt.isEmpty {
+            try container.encode(fieldUpdatedAt.mapValues(ISODate.string), forKey: "fieldUpdatedAt")
+        }
         try container.encode(id.uuidString, forKey: "id")
         if let imageData {
-            try container.encode(imageData.base64EncodedString(), forKey: "imageData")
+            try put("imageData", imageData.base64EncodedString())
+        } else if let raw = unparsed["imageData"] {
+            try container.encode(raw, forKey: "imageData")
         }
-        try container.encode(inMenubar, forKey: "inMenubar")
-        try container.encode(kind.rawValue, forKey: "kind")
-        try container.encode(name, forKey: "name")
-        try container.encode(remindDays, forKey: "remindDays")
-        try container.encode(repeatCycle.rawValue, forKey: "repeatCycle")
-        try container.encode(sortWeight, forKey: "sortWeight")
-        try container.encode(span.rawValue, forKey: "span")
-        try container.encode(ISODate.string(startDate), forKey: "startDate")
-        try container.encode(unit.rawValue, forKey: "unit")
+        try put("inMenubar", inMenubar)
+        try put("kind", kind.rawValue)
+        try put("name", name)
+        try put("remindDays", remindDays)
+        try put("repeatCycle", repeatCycle.rawValue)
+        try put("sortWeight", sortWeight)
+        try put("span", span.rawValue)
+        try put("startDate", ISODate.string(startDate))
+        try put("unit", unit.rawValue)
         try container.encode(ISODate.string(updatedAt), forKey: "updatedAt")
     }
 }

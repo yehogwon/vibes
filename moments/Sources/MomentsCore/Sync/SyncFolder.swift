@@ -88,13 +88,24 @@ public final class SyncFolder: Sendable {
         let momentsData = try Self.read(momentsURL)
         let deletionsData = try Self.read(deletionsURL)
 
-        // What the folder has now. A file that can't be read is kept beside it, not overwritten.
+        // What the folder has now. A damaged file is kept beside it and written again, so it's
+        // set aside only once.
         var onDisk = MomentSet()
+        var rewriteMoments = false
+        var rewriteDeletions = false
         if let momentsData {
             do {
                 onDisk = MomentSet(list: try MomentFile.decode(momentsData))
+            } catch where Self.isJSON(momentsData) {
+                // Valid JSON of another shape is probably a newer app's format. Replacing it could
+                // break that app, so leave it alone.
+                return Result(
+                    library: library,
+                    status: .failed(
+                        "\(MomentFile.name) is in a format this version of Moments doesn't know, so it was left alone."))
             } catch {
                 notices.append(try setAside(momentsData, of: momentsURL, now: now))
+                rewriteMoments = true
             }
         }
         if let deletionsData {
@@ -102,60 +113,69 @@ public final class SyncFolder: Sendable {
                 onDisk.deleted = try MomentFile.decodeDeletions(deletionsData)
             } catch {
                 notices.append(try setAside(deletionsData, of: deletionsURL, now: now))
+                rewriteDeletions = true
             }
         }
 
-        // iCloud keeps the losing side of two Macs writing at once as a conflict version. Merge
-        // each in, then mark it resolved below.
-        let base = library.syncedFolder == url.path ? library.synced : [:]
+        // iCloud keeps the losing side of two Macs writing at once as a conflict version. Merge in
+        // each one, and only then mark it resolved; one that isn't on this Mac yet waits for the
+        // next sync.
         var remote = onDisk
-        let conflicts = (NSFileVersion.unresolvedConflictVersionsOfItem(at: momentsURL) ?? [])
-            + (NSFileVersion.unresolvedConflictVersionsOfItem(at: deletionsURL) ?? [])
-        for version in conflicts {
-            guard let data = try? Data(contentsOf: version.url) else { continue }
-            if let list = try? MomentFile.decode(data) {
-                remote = MomentMerge.merge(remote, MomentSet(list: list), base: base)
-            } else if let deleted = try? MomentFile.decodeDeletions(data) {
-                remote.deleted.merge(deleted, uniquingKeysWith: max)
+        var resolved: [NSFileVersion] = []
+        var waiting: Set<URL> = []
+        for file in [momentsURL, deletionsURL] {
+            for version in NSFileVersion.unresolvedConflictVersionsOfItem(at: file) ?? [] {
+                guard let data = try? Data(contentsOf: version.url) else {
+                    waiting.insert(file)
+                    continue
+                }
+                if file == momentsURL, let list = try? MomentFile.decode(data) {
+                    remote = MomentMerge.merge(remote, MomentSet(list: list))
+                } else if file == deletionsURL, let deleted = try? MomentFile.decodeDeletions(data) {
+                    remote.deleted.merge(deleted, uniquingKeysWith: max)
+                } else {
+                    notices.append(try setAside(data, of: file, now: now, as: "conflict"))
+                }
+                resolved.append(version)
             }
         }
 
-        var (merged, set) = library.merging(folder: remote, folderPath: url.path)
+        var (merged, set) = library.merging(remote)
         merged.forgetDeletions(before: now.addingTimeInterval(-Self.deletionMemory))
         set.deleted = merged.deleted
 
-        if !merged.backedUp {
+        if merged.backedUpFolder != url.path {
             if let momentsData, !momentsData.isEmpty, let backupFolder {
                 try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
                 let backup = Self.uniqueURL(
                     backupFolder.appendingPathComponent("moments \(Self.fileStamp(now)).json"))
                 try momentsData.write(to: backup, options: .atomic)
             }
-            merged.backedUp = true
+            merged.backedUpFolder = url.path
         }
 
         // Write only what changed, so a sync that finds nothing new doesn't touch the files (and
         // wake every other Mac).
         let momentsChanged = set.moments != onDisk.moments || set.unreadable != onDisk.unreadable
-        if momentsChanged && (momentsData != nil || !set.moments.isEmpty || !set.unreadable.isEmpty) {
+        if rewriteMoments || momentsChanged && (momentsData != nil || !set.moments.isEmpty || !set.unreadable.isEmpty) {
             try MomentFile.encode(set.list).write(to: momentsURL, options: .atomic)
         }
-        if set.deleted != onDisk.deleted && (deletionsData != nil || !set.deleted.isEmpty) {
+        if rewriteDeletions || set.deleted != onDisk.deleted && (deletionsData != nil || !set.deleted.isEmpty) {
             try MomentFile.encodeDeletions(set.deleted).write(to: deletionsURL, options: .atomic)
         }
 
-        for version in conflicts {
+        for version in resolved {
             version.isResolved = true
         }
-        if !conflicts.isEmpty {
-            try? NSFileVersion.removeOtherVersionsOfItem(at: momentsURL)
-            try? NSFileVersion.removeOtherVersionsOfItem(at: deletionsURL)
+        for file in [momentsURL, deletionsURL] where !waiting.contains(file) && !resolved.isEmpty {
+            try? NSFileVersion.removeOtherVersionsOfItem(at: file)
         }
-        return Result(library: merged, status: .synced, notices: notices)
+        return Result(library: merged, status: waiting.isEmpty ? .synced : .downloading, notices: notices)
     }
 
     /// How long a deletion is remembered.
     static let deletionMemory: TimeInterval = 365 * 24 * 60 * 60
+
 
     // MARK: - Helpers
 
@@ -169,11 +189,16 @@ public final class SyncFolder: Sendable {
     }
 
     /// Keeps an unreadable file's contents as "<name> (unreadable <date>).json" beside it.
-    private func setAside(_ data: Data, of file: URL, now: Date) throws -> String {
+    private func setAside(_ data: Data, of file: URL, now: Date, as label: String = "unreadable") throws -> String {
         let name = file.deletingPathExtension().lastPathComponent
-        let copy = Self.uniqueURL(url.appendingPathComponent("\(name) (unreadable \(Self.fileStamp(now))).json"))
+        let copy = Self.uniqueURL(url.appendingPathComponent("\(name) (\(label) \(Self.fileStamp(now))).json"))
         try data.write(to: copy, options: .atomic)
-        return "\(file.lastPathComponent) couldn't be read, so it was kept as “\(copy.lastPathComponent)”."
+        let what = label == "conflict" ? "A conflicting copy of \(file.lastPathComponent)" : file.lastPathComponent
+        return "\(what) couldn't be read, so it was kept as “\(copy.lastPathComponent)”."
+    }
+
+    private static func isJSON(_ data: Data) -> Bool {
+        (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)) != nil
     }
 
     static func fileStamp(_ date: Date) -> String {

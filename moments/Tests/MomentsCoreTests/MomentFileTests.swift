@@ -143,6 +143,67 @@ struct MomentFileTests {
         #expect(try MomentFile.decodeDeletions(Data()) == [:])
     }
 
+    static let odd = #"""
+        [
+          {
+            "color" : {
+              "alpha" : 0.5,
+              "hex" : "FF453A"
+            },
+            "date" : "not a date",
+            "id" : "0501D8DF-186C-4EA0-A659-CF1E0D851148",
+            "imageData" : null,
+            "inMenubar" : 1,
+            "name" : "Odd"
+          }
+        ]
+        """#
+
+    /// The fields of the first moment in `list` as they'd be written.
+    func written(_ list: MomentList) throws -> [String: JSONValue] {
+        try JSONDecoder().decode([[String: JSONValue]].self, from: MomentFile.encode(list))[0]
+    }
+
+    @Test func keepsValuesOfUnexpectedTypes() throws {
+        let list = try MomentFile.decode(Data(Self.odd.utf8))
+        let moment = try #require(list.moments.first)
+        #expect(moment.colorHex == "FF453A")
+        #expect(!moment.inMenubar)
+        let fields = try written(list)
+        #expect(fields["color"] == .object(["alpha": .number(0.5), "hex": .string("FF453A")]))
+        #expect(fields["date"] == .string("not a date"))
+        #expect(fields["imageData"] == .null)
+        #expect(fields["inMenubar"] == .integer(1))
+    }
+
+    @Test func anEditReplacesAValueOfUnexpectedType() throws {
+        let list = try MomentFile.decode(Data(Self.odd.utf8))
+        var library = MomentLibrary()
+        library.save(list.moments[0])
+        var moment = list.moments[0]
+        moment.inMenubar = true
+        moment.colorHex = "32D74B"
+        library.save(moment)
+        let fields = try written(MomentList(moments: library.sortedMoments))
+        #expect(fields["inMenubar"] == .bool(true))
+        #expect(fields["color"] == .object(["hex": .string("32D74B")]))
+        #expect(fields["date"] == .string("not a date"))
+    }
+
+    @Test func roundTripsFieldTimes() throws {
+        var moment = Moment(name: "Stamped", date: at(0), createdAt: at(0), updatedAt: at(20))
+        moment.fieldUpdatedAt = ["name": at(20), "emoji": at(10)]
+        let data = try MomentFile.encode(MomentList(moments: [moment]))
+        #expect(try MomentFile.decode(data).moments == [moment])
+        #expect(String(decoding: data, as: UTF8.self).contains(#""fieldUpdatedAt" : {"#))
+    }
+
+    @Test func leavesFieldTimesOutUntilAFieldChanges() throws {
+        let moment = Moment(name: "Plain", date: at(0), createdAt: at(0))
+        let data = try MomentFile.encode(MomentList(moments: [moment]))
+        #expect(!String(decoding: data, as: UTF8.self).contains("fieldUpdatedAt"))
+    }
+
     @Test func dropsFractionsOfASecond() {
         let date = Date(timeIntervalSince1970: 1000.75)
         let moment = Moment(date: date, createdAt: date)

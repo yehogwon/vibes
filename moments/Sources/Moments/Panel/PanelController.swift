@@ -21,6 +21,9 @@ final class PanelController {
     private let panel = FloatingPanel()
     private let state: AppState
     private weak var anchor: NSStatusBarButton?
+    /// Where the panel hangs when its item goes away, e.g. a moment taken out of the menu bar
+    /// while the panel was open under it. Set to the app's own item.
+    var fallbackAnchor: () -> NSStatusBarButton? = { nil }
     /// The natural height of the SwiftUI content, which the panel follows.
     private var contentHeight: CGFloat = 120
     private var pendingPeek: Task<Void, Never>?
@@ -211,24 +214,36 @@ final class PanelController {
         }
     }
 
-    /// Under the anchor, centered on it, kept on its screen.
+    /// The item the panel hangs from: its anchor, or the app's own item if that's gone from the
+    /// menu bar.
+    private var placement: NSStatusBarButton? {
+        if let anchor, anchor.window != nil {
+            return anchor
+        }
+        return fallbackAnchor()
+    }
+
+    /// Under the item, centered on it, kept on its screen. Just under the menu bar if there's
+    /// no item to hang from.
     private func targetFrame() -> NSRect {
-        let anchorRect = anchor.map(Self.screenRect) ?? .zero
-        let screen = anchor?.window?.screen ?? NSScreen.main
+        let item = placement
+        let screen = item?.window?.screen ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let top = min(anchorRect.minY, visible.maxY) - 6
-        let height = min(contentHeight, top - visible.minY - 12)
-        let x = min(max(anchorRect.midX - Self.width / 2, visible.minX + 8), visible.maxX - Self.width - 8)
+        let itemRect = item.flatMap(Self.screenRect) ?? NSRect(x: visible.maxX - 100, y: visible.maxY, width: 0, height: 0)
+        let top = min(itemRect.minY, visible.maxY) - 6
+        let height = max(min(contentHeight, top - visible.minY - 12), 60)
+        let x = min(max(itemRect.midX - Self.width / 2, visible.minX + 8), visible.maxX - Self.width - 8)
         return NSRect(x: x.rounded(), y: (top - height).rounded(), width: Self.width, height: height.rounded())
     }
 
-    private static func screenRect(of button: NSStatusBarButton) -> NSRect {
-        guard let window = button.window else { return .zero }
+    /// Where the item is on screen, or `nil` if it isn't in the menu bar.
+    private static func screenRect(of button: NSStatusBarButton) -> NSRect? {
+        guard let window = button.window else { return nil }
         return window.convertToScreen(button.convert(button.bounds, to: nil))
     }
 
     private static func isPointer(over button: NSStatusBarButton) -> Bool {
-        screenRect(of: button).insetBy(dx: -1, dy: -1).contains(NSEvent.mouseLocation)
+        screenRect(of: button)?.insetBy(dx: -1, dy: -1).contains(NSEvent.mouseLocation) == true
     }
 
     // MARK: - Leaving a peek
@@ -253,8 +268,8 @@ final class PanelController {
     private func checkPointer() {
         guard mode == .peeking else { return stopLeaveTimer() }
         // The item, the panel, and the gap between them, with a little slack.
-        let anchorRect = anchor.map(Self.screenRect) ?? .zero
-        let zone = anchorRect.union(targetFrame()).insetBy(dx: -8, dy: -8)
+        let itemRect = placement.flatMap(Self.screenRect) ?? .null
+        let zone = itemRect.union(targetFrame()).insetBy(dx: -8, dy: -8)
         if zone.contains(NSEvent.mouseLocation) {
             pointerLeftAt = nil
         } else if let leftAt = pointerLeftAt {

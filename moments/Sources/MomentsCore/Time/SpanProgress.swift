@@ -20,7 +20,11 @@ extension Moment {
         let component: Calendar.Component
         switch span {
         case .custom:
-            return DateInterval(start: min(startDate, endDate), end: max(startDate, endDate))
+            // From the start of the first day to the end of the last, which counts too.
+            let start = calendar.startOfDay(for: min(startDate, endDate))
+            let lastDay = calendar.startOfDay(for: max(startDate, endDate))
+            let end = calendar.date(byAdding: .day, value: 1, to: lastDay) ?? lastDay
+            return DateInterval(start: start, end: end)
         case .quarter:
             // Calendar's own quarter support is unreliable, so count three months from the
             // quarter's first month.

@@ -16,127 +16,123 @@ func set(_ moments: Moment..., deleted: [UUID: Date] = [:]) -> MomentSet {
     MomentSet(moments: Dictionary(uniqueKeysWithValues: moments.map { ($0.id, $0) }), deleted: deleted)
 }
 
+/// `moment` as a library would save it after `edit`, at `time`.
+func edited(_ moment: Moment, at time: TimeInterval, _ edit: (inout Moment) -> Void) -> Moment {
+    var library = MomentLibrary()
+    library.moments[moment.id] = moment
+    var copy = moment
+    edit(&copy)
+    library.save(copy, now: at(time))
+    return library.moments[moment.id]!
+}
+
 @Suite("MomentMerge")
 struct MergeTests {
     @Test func keepsMomentsAddedOnEitherSide() {
         let mine = moment("mine")
         let theirs = moment("theirs")
-        let merged = MomentMerge.merge(set(mine), set(theirs), base: [:])
+        let merged = MomentMerge.merge(set(mine), set(theirs))
         #expect(Set(merged.moments.values.map(\.name)) == ["mine", "theirs"])
     }
 
     @Test func aMissingMomentIsNotADeletion() {
-        let base = moment("kept")
-        let merged = MomentMerge.merge(set(), set(base), base: [base.id: base])
-        #expect(merged.moments[base.id] == base)
+        let kept = moment("kept")
+        #expect(MomentMerge.merge(set(), set(kept)).moments[kept.id] == kept)
     }
 
     @Test func combinesEditsToDifferentFields() {
-        let base = moment("Trip", updated: 0)
-        var mine = base
-        mine.emoji = "✈️"
-        mine.updatedAt = at(10)
-        var theirs = base
-        theirs.name = "Trip to Jeju"
-        theirs.inMenubar = true
-        theirs.updatedAt = at(20)
-
-        for merged in [
-            MomentMerge.merge(set(mine), set(theirs), base: [base.id: base]),
-            MomentMerge.merge(set(theirs), set(mine), base: [base.id: base]),
-        ] {
-            let result = merged.moments[base.id]
-            #expect(result?.name == "Trip to Jeju")
-            #expect(result?.emoji == "✈️")
-            #expect(result?.inMenubar == true)
-            #expect(result?.updatedAt == at(20))
+        let trip = moment("Trip")
+        let mine = edited(trip, at: 10) { $0.emoji = "✈️" }
+        let theirs = edited(trip, at: 20) {
+            $0.name = "Trip to Jeju"
+            $0.inMenubar = true
+        }
+        for result in [Moment.merged(mine, theirs), Moment.merged(theirs, mine)] {
+            #expect(result.name == "Trip to Jeju")
+            #expect(result.emoji == "✈️")
+            #expect(result.inMenubar)
+            #expect(result.updatedAt == at(20))
+            #expect(result.stamp(of: "emoji") == at(10))
+            #expect(result.stamp(of: "name") == at(20))
+            #expect(result.stamp(of: "date") == at(0))
         }
     }
 
-    @Test func theNewerEditWinsAFieldBothChanged() {
-        let base = moment("Trip", updated: 0)
-        var mine = base
-        mine.name = "Mine"
-        mine.updatedAt = at(30)
-        var theirs = base
-        theirs.name = "Theirs"
-        theirs.colorHex = "FF453A"
+    @Test func theLaterEditWinsAFieldBothChanged() {
+        let trip = moment("Trip")
+        let mine = edited(trip, at: 30) { $0.name = "Mine" }
+        let theirs = edited(trip, at: 20) {
+            $0.name = "Theirs"
+            $0.colorHex = "FF453A"
+        }
+        let result = Moment.merged(mine, theirs)
+        #expect(result.name == "Mine")
+        #expect(result.colorHex == "FF453A")
+    }
+
+    @Test func anOlderEditOfAnotherFieldStillSurvives() {
+        // The rename happened first, on a Mac that then went quiet; a later emoji change on
+        // another Mac doesn't undo it.
+        let trip = moment("Trip")
+        let renamed = edited(trip, at: 100) { $0.name = "Renamed" }
+        let decorated = edited(trip, at: 105) { $0.emoji = "🎒" }
+        let result = Moment.merged(decorated, renamed)
+        #expect(result.name == "Renamed")
+        #expect(result.emoji == "🎒")
+    }
+
+    @Test func anEditFromAnAppThatDoesntStampFieldsWinsWhole() {
+        // The original app bumps updatedAt without saying which fields changed.
+        let trip = moment("Trip")
+        let mine = edited(trip, at: 10) { $0.emoji = "✈️" }
+        var theirs = trip
+        theirs.name = "Renamed elsewhere"
         theirs.updatedAt = at(20)
-
-        let result = MomentMerge.merge(set(mine), set(theirs), base: [base.id: base]).moments[base.id]
-        #expect(result?.name == "Mine")
-        #expect(result?.colorHex == "FF453A")
+        let result = Moment.merged(mine, theirs)
+        #expect(result == Moment.merged(theirs, mine))
+        #expect(result.name == "Renamed elsewhere")
+        #expect(result.emoji == "")
     }
 
-    @Test func withoutABaseTheNewerVersionWinsWhole() {
-        let id = UUID()
-        var older = moment("older", updated: 5, id: id)
-        older.emoji = "🐢"
-        let newer = moment("newer", updated: 9, id: id)
-        let result = MomentMerge.merge(set(older), set(newer), base: [:]).moments[id]
-        #expect(result == newer)
-    }
-
-    @Test func tiesAreBrokenTheSameWayOnEveryMac() {
-        let id = UUID()
-        let a = moment("a", updated: 5, id: id)
-        let b = moment("b", updated: 5, id: id)
-        let one = MomentMerge.merge(set(a), set(b), base: [:])
-        let other = MomentMerge.merge(set(b), set(a), base: [:])
-        #expect(one == other)
-    }
-
-    @Test func ignoresAStaleCopy() {
-        // This Mac synced "Current"; an old conflict version still says "Old".
-        let id = UUID()
-        let current = moment("Current", updated: 50, id: id)
-        let stale = moment("Old", updated: 10, id: id)
-        let result = MomentMerge.merge(set(current), set(stale), base: [id: current]).moments[id]
-        #expect(result == current)
-    }
-
-    @Test func takesTheOtherSidesEditWhenThisSideDidntChange() {
-        let base = moment("Before", updated: 10)
-        var theirs = base
-        theirs.name = "After"
-        theirs.updatedAt = at(20)
-        let result = MomentMerge.merge(set(base), set(theirs), base: [base.id: base]).moments[base.id]
-        #expect(result?.name == "After")
+    @Test func mergingIsOrderIndependent() {
+        let trip = moment("Trip")
+        let a = edited(trip, at: 10) { $0.name = "A" }
+        let b = edited(trip, at: 10) { $0.name = "B" }
+        let c = edited(trip, at: 12) { $0.emoji = "🌊" }
+        let ab = Moment.merged(a, b)
+        #expect(ab == Moment.merged(b, a))
+        #expect(Moment.merged(ab, c) == Moment.merged(a, Moment.merged(b, c)))
+        #expect(Moment.merged(ab, ab) == ab)
+        // A tie on the same field is broken by value, the same way everywhere.
+        #expect(ab.name == "B")
     }
 
     @Test func aDeletionRemovesEarlierVersions() {
         let doomed = moment("doomed", updated: 10)
-        let merged = MomentMerge.merge(set(), set(doomed), base: [:])
-        #expect(merged.moments[doomed.id] != nil)
-
-        let deleted = MomentMerge.merge(set(deleted: [doomed.id: at(11)]), set(doomed), base: [:])
-        #expect(deleted.moments[doomed.id] == nil)
-        #expect(deleted.deleted[doomed.id] == at(11))
+        let merged = MomentMerge.merge(set(deleted: [doomed.id: at(11)]), set(doomed))
+        #expect(merged.moments[doomed.id] == nil)
+        #expect(merged.deleted[doomed.id] == at(11))
     }
 
     @Test func anEditAfterTheDeletionBringsTheMomentBack() {
         let revived = moment("revived", updated: 20)
-        let merged = MomentMerge.merge(set(deleted: [revived.id: at(11)]), set(revived), base: [:])
+        let merged = MomentMerge.merge(set(deleted: [revived.id: at(11)]), set(revived))
         #expect(merged.moments[revived.id] == revived)
     }
 
     @Test func keepsTheLaterOfTwoDeletions() {
         let id = UUID()
-        let merged = MomentMerge.merge(set(deleted: [id: at(5)]), set(deleted: [id: at(9)]), base: [:])
+        let merged = MomentMerge.merge(set(deleted: [id: at(5)]), set(deleted: [id: at(9)]))
         #expect(merged.deleted[id] == at(9))
     }
 
-    @Test func combinesUnknownKeysLikeFields() {
-        var base = moment("x")
-        base.extras = ["a": .integer(1)]
-        var mine = base
-        mine.extras["a"] = .integer(2)
-        mine.updatedAt = at(10)
-        var theirs = base
-        theirs.extras["b"] = .string("new")
-        theirs.updatedAt = at(20)
-        let result = MomentMerge.merge(set(mine), set(theirs), base: [base.id: base]).moments[base.id]
-        #expect(result?.extras == ["a": .integer(2), "b": .string("new")])
+    @Test func unknownKeysComeFromTheNewerVersion() {
+        var older = moment("x", updated: 5)
+        older.extras = ["a": .integer(1)]
+        var newer = older
+        newer.extras = ["a": .integer(2), "b": .string("new")]
+        newer.updatedAt = at(9)
+        #expect(Moment.merged(older, newer).extras == newer.extras)
     }
 }
 
@@ -145,13 +141,10 @@ struct LibraryTests {
     @Test func stampsEditsAfterTheVersionTheyReplace() {
         // Another Mac's clock is an hour ahead; an edit made here after seeing its version must
         // still count as newer.
-        var library = MomentLibrary()
         let ahead = moment("from the future", updated: 3600)
-        library.moments[ahead.id] = ahead
-        var edited = ahead
-        edited.name = "edited here"
-        library.save(edited, now: at(0))
-        #expect(library.moments[ahead.id]?.updatedAt == at(3601))
+        let result = edited(ahead, at: 0) { $0.name = "edited here" }
+        #expect(result.updatedAt == at(3601))
+        #expect(result.stamp(of: "name") == at(3601))
     }
 
     @Test func savingUnchangedContentDoesNothing() {
@@ -161,7 +154,31 @@ struct LibraryTests {
         var copy = original
         copy.updatedAt = at(100)
         library.save(copy, now: at(100))
-        #expect(library.moments[original.id]?.updatedAt == at(5))
+        #expect(library.moments[original.id] == original)
+    }
+
+    @Test func savesOnlyWhatTheEditorChanged() {
+        // While the editor was open, a rename arrived from another Mac.
+        var library = MomentLibrary()
+        let original = moment("Trip")
+        library.moments[original.id] = edited(original, at: 10) { $0.name = "Renamed elsewhere" }
+
+        var draft = original
+        draft.emoji = "🎒"
+        library.save(draft, from: original, now: at(20))
+        let saved = library.moments[original.id]
+        #expect(saved?.name == "Renamed elsewhere")
+        #expect(saved?.emoji == "🎒")
+        #expect(saved?.stamp(of: "name") == at(10))
+    }
+
+    @Test func aFirstEditKeepsTheOriginalAppsTimesForOtherFields() {
+        // Written by the original app: no per-field times.
+        let fromFile = moment("Trip", updated: 50)
+        let result = edited(fromFile, at: 60) { $0.emoji = "🎒" }
+        #expect(result.stamp(of: "emoji") == at(60))
+        #expect(result.stamp(of: "name") == at(50))
+        #expect(result.fieldUpdatedAt.keys.count > 1)
     }
 
     @Test func deletingRecordsWhen() {
@@ -171,6 +188,16 @@ struct LibraryTests {
         library.delete(doomed.id, now: at(10))
         #expect(library.moments.isEmpty)
         #expect(library.deleted[doomed.id] == at(51))
+    }
+
+    @Test func savingADeletedMomentBringsItBack() {
+        var library = MomentLibrary()
+        let doomed = moment("doomed", updated: 50)
+        library.moments[doomed.id] = doomed
+        library.delete(doomed.id, now: at(60))
+        library.save(doomed, now: at(10))
+        let merged = MomentMerge.merge(library.set, set(deleted: library.deleted))
+        #expect(merged.moments[doomed.id] != nil)
     }
 
     @Test func reorderingRenumbersOnlyWhatMoved() {
@@ -183,13 +210,14 @@ struct LibraryTests {
         library.reorder([a.id, c.id, b.id], now: at(100))
         #expect(library.sortedMoments.map(\.name) == ["a", "c", "b"])
         #expect(library.moments[a.id]?.updatedAt == at(0))
-        #expect(library.moments[c.id]?.updatedAt == at(100))
+        #expect(library.moments[c.id]?.stamp(of: "sortWeight") == at(100))
+        #expect(library.moments[c.id]?.stamp(of: "name") == at(0))
         #expect(library.nextSortWeight == 3)
     }
 
     @Test func integratingKeepsEditsMadeDuringASync() {
         var snapshot = MomentLibrary()
-        let shared = moment("shared", updated: 0)
+        let shared = moment("shared")
         snapshot.moments[shared.id] = shared
 
         // While syncing, this Mac renamed the moment and added another...
@@ -202,20 +230,17 @@ struct LibraryTests {
 
         // ...and the sync brought in another Mac's new color and a new moment.
         var result = snapshot
-        var recolored = shared
-        recolored.colorHex = "32D74B"
-        recolored.updatedAt = at(5)
-        result.moments[shared.id] = recolored
+        result.moments[shared.id] = edited(shared, at: 5) { $0.colorHex = "32D74B" }
         let arrived = moment("from the other Mac", updated: 5)
         result.moments[arrived.id] = arrived
-        result.synced = result.moments
+        result.backedUpFolder = "/folder"
 
-        let integrated = current.integrating(result, from: snapshot)
+        let integrated = current.integrating(result)
         #expect(integrated.moments[shared.id]?.name == "renamed here")
         #expect(integrated.moments[shared.id]?.colorHex == "32D74B")
         #expect(integrated.moments[added.id] != nil)
         #expect(integrated.moments[arrived.id] != nil)
-        #expect(integrated.synced == result.synced)
+        #expect(integrated.backedUpFolder == "/folder")
     }
 
     @Test func forgetsOldDeletions() {
@@ -228,12 +253,11 @@ struct LibraryTests {
 
     @Test func roundTripsThroughJSON() throws {
         var library = MomentLibrary()
-        library.save(moment("a", updated: 1), now: at(1))
-        library.delete(UUID(), now: at(2))
+        let first = moment("a", updated: 1)
+        library.save(first, now: at(1))
+        library.save(edited(first, at: 5) { $0.emoji = "🎈" }, now: at(5))
         library.deleted[UUID()] = at(3)
-        library.synced = library.moments
-        library.syncedFolder = "/tmp/folder"
-        library.backedUp = true
+        library.backedUpFolder = "/tmp/folder"
         let data = try MomentFile.encoder.encode(library)
         #expect(try JSONDecoder().decode(MomentLibrary.self, from: data) == library)
     }

@@ -258,4 +258,82 @@ struct MomentStoreTests {
         #expect(macs.b.moments.map(\.name) == ["Mine"])
         macs.disconnect()
     }
+
+    @Test func editsBothMacsWroteWhileApartBothSurvive() async throws {
+        let macs = try TwoMacs()
+        await macs.connect()
+        let trip = macs.new("Trip", on: macs.a)
+        await macs.settle()
+        macs.disconnect()
+
+        // Offline, each Mac's copy of iCloud Drive is still there and writable, so each writes
+        // its edit to its own copy of the file.
+        let copyA = macs.directory.path("Cloud A")
+        let copyB = macs.directory.path("Cloud B")
+        try FileManager.default.copyItem(at: macs.cloud, to: copyA)
+        try FileManager.default.copyItem(at: macs.cloud, to: copyB)
+        macs.clock.advance(60)
+        macs.a.connect(to: copyA)
+        var renamed = try #require(macs.a.moment(withID: trip.id))
+        renamed.name = "Trip to Jeju"
+        macs.a.save(renamed)
+        await macs.a.waitForSync()
+        macs.clock.advance(5)
+        macs.b.connect(to: copyB)
+        var decorated = try #require(macs.b.moment(withID: trip.id))
+        decorated.emoji = "🎒"
+        macs.b.save(decorated)
+        await macs.b.waitForSync()
+        macs.disconnect()
+
+        // Back online, iCloud keeps A's file.
+        let file = macs.cloud.appendingPathComponent(MomentFile.name)
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.copyItem(at: copyA.appendingPathComponent(MomentFile.name), to: file)
+        await macs.connect()
+        for store in [macs.a, macs.b] {
+            let merged = try #require(store.moment(withID: trip.id))
+            #expect(merged.name == "Trip to Jeju")
+            #expect(merged.emoji == "🎒")
+        }
+        #expect(try macs.cloudMoments().first?.emoji == "🎒")
+        macs.disconnect()
+    }
+
+    @Test func setsAsideAnUnreadableFileOnlyOnce() async throws {
+        let macs = try TwoMacs()
+        try FileManager.default.createDirectory(at: macs.cloud, withIntermediateDirectories: true)
+        try Data("{ not a list".utf8).write(to: macs.cloud.appendingPathComponent(MomentFile.name))
+
+        // A new Mac with nothing of its own to write.
+        macs.a.connect(to: macs.cloud)
+        for _ in 0..<3 {
+            macs.a.sync()
+            await macs.a.waitForSync()
+        }
+        let names = try FileManager.default.contentsOfDirectory(atPath: macs.cloud.path)
+        #expect(names.filter { $0.contains("unreadable") }.count == 1)
+        #expect(try macs.cloudMoments().isEmpty)
+        macs.disconnect()
+    }
+
+    @Test func leavesAFileInAnUnknownFormatAlone() async throws {
+        let macs = try TwoMacs()
+        try FileManager.default.createDirectory(at: macs.cloud, withIntermediateDirectories: true)
+        let file = macs.cloud.appendingPathComponent(MomentFile.name)
+        let newer = Data(#"{"version" : 2, "moments" : []}"#.utf8)
+        try newer.write(to: file)
+
+        _ = macs.new("Local", on: macs.a)
+        macs.a.connect(to: macs.cloud)
+        await macs.a.waitForSync()
+        guard case .failed = macs.a.status else {
+            Issue.record("Expected a failure, got \(macs.a.status)")
+            return
+        }
+        #expect(try Data(contentsOf: file) == newer)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: macs.cloud.path) == [MomentFile.name])
+        #expect(macs.a.moments.map(\.name) == ["Local"])
+        macs.disconnect()
+    }
 }

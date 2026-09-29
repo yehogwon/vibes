@@ -90,8 +90,10 @@ final class AppState {
         route = .editor(store.moment(withID: moment.id) ?? moment, isNew: false)
     }
 
-    func save(_ moment: Moment) {
-        store.save(moment)
+    /// - Parameter original: The moment as editing began, so a change that arrived from another
+    ///   Mac while editing isn't undone.
+    func save(_ moment: Moment, editedFrom original: Moment?) {
+        store.save(moment, from: original)
         route = .list
     }
 

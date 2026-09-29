@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 pointerExited: { [weak self] in self?.panel.pointerExited($0) },
                 clicked: { [weak self] in self?.panel.clicked($0) },
                 menu: { [weak self] in self?.makeStatusMenu() ?? NSMenu() }))
+        panel.fallbackAnchor = { [weak self] in self?.statusItems.main.button }
         state.momentsDidChange = { [weak self] in
             guard let self else { return }
             self.statusItems.update(self.state.store.moments, now: self.state.now)

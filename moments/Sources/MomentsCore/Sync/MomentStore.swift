@@ -40,6 +40,8 @@ public final class MomentStore {
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var needsSync = false
     @ObservationIgnored private var retryTask: Task<Void, Never>?
+    /// Failed syncs in a row, for backing off.
+    @ObservationIgnored private var failures = 0
 
     /// - Parameters:
     ///   - libraryURL: This Mac's copy of the moments. Created on the first change.
@@ -58,9 +60,12 @@ public final class MomentStore {
         library.moments[id]
     }
 
-    /// Adds the moment, or replaces the one with its id.
-    public func save(_ moment: Moment) {
-        library.save(moment, now: now())
+    /// Adds the moment, or saves it over the one with its id.
+    ///
+    /// - Parameter original: The moment as it was when editing began, so only the fields edited
+    ///   since are saved and a change another Mac made meanwhile isn't undone.
+    public func save(_ moment: Moment, from original: Moment? = nil) {
+        library.save(moment, from: original, now: now())
         changed()
     }
 
@@ -102,6 +107,7 @@ public final class MomentStore {
         }
         presenter = nil
         retryTask?.cancel()
+        failures = 0
         folder = url.map { SyncFolder(url: $0, backupFolder: backupFolder) }
         guard let url else {
             status = .off
@@ -145,19 +151,22 @@ public final class MomentStore {
         guard folder === self.folder else { return }
 
         let before = library
-        library = library.integrating(result.library, from: snapshot)
+        library = library.integrating(result.library)
         if let notice = result.notices.last {
             self.notice = notice
         }
         switch result.status {
         case .synced:
             status = .synced(now())
+            failures = 0
         case .downloading:
             status = .downloading
-            scheduleRetry()
+            scheduleRetry(after: 3)
         case .failed(let message):
             status = .failed(message)
-            scheduleRetry()
+            // Something that keeps failing is tried less and less often, up to every 5 minutes.
+            failures += 1
+            scheduleRetry(after: min(3 * pow(2, Double(failures - 1)), 300))
         }
         if library != before {
             publish()
@@ -166,10 +175,10 @@ public final class MomentStore {
     }
 
     /// iCloud doesn't always say when a download finishes, so check again in a bit.
-    private func scheduleRetry() {
+    private func scheduleRetry(after seconds: Double) {
         retryTask?.cancel()
         retryTask = Task {
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
             sync()
         }

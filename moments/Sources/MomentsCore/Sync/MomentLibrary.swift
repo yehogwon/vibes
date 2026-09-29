@@ -1,17 +1,12 @@
 import Foundation
 
-/// This Mac's copy of the moments, kept in Application Support so the app works offline, starts
-/// without waiting for iCloud, and remembers what it last synced.
+/// This Mac's copy of the moments, kept in Application Support so the app works offline and
+/// starts without waiting for iCloud.
 public struct MomentLibrary: Equatable, Sendable {
     public var moments: [UUID: Moment] = [:]
     public var deleted: [UUID: Date] = [:]
-    /// The moments as the sync folder had them after this Mac last synced with it: the base a
-    /// sync compares both sides against to tell who changed what.
-    public var synced: [UUID: Moment] = [:]
-    /// The sync folder `synced` belongs to.
-    public var syncedFolder: String?
-    /// Whether the folder's `moments.json` was backed up before this Mac first wrote to it.
-    public var backedUp = false
+    /// The sync folder whose `moments.json` was backed up before this Mac first wrote to it.
+    public var backedUpFolder: String?
 
     public init() {}
 
@@ -26,21 +21,31 @@ public struct MomentLibrary: Equatable, Sendable {
 
     // MARK: - Edits
 
-    // Every edit stamps `updatedAt` later than the version it replaces, even if this Mac's clock
-    // is behind the one that wrote that version. So an edit made after seeing another Mac's
-    // change always counts as newer than it.
+    // Every edit is stamped later than the version it changes, even if this Mac's clock is
+    // behind the one that wrote that version, so an edit made after seeing another Mac's change
+    // always counts as newer than it.
 
-    /// Adds `moment`, or replaces the moment with its id. Saving unchanged content does nothing.
-    public mutating func save(_ moment: Moment, now: Date = .now) {
+    /// Adds `moment`, or saves the fields that differ from `original` into the moment with its
+    /// id. Saving unchanged content does nothing.
+    ///
+    /// - Parameter original: The moment as it was when editing began. Only the fields changed
+    ///   since then are saved, so a change that arrived from another Mac meanwhile survives. If
+    ///   `nil`, every field that differs from the current version is saved.
+    public mutating func save(_ moment: Moment, from original: Moment? = nil, now: Date = .now) {
         var moment = moment
         moment.normalizeDates()
-        let previous = moments[moment.id]
-        if let previous, previous.hasSameContent(as: moment) {
+        guard let current = moments[moment.id] else {
+            // New, or back after being deleted.
+            moment.updatedAt = Self.stamp(now: now, after: deleted[moment.id])
+            moment.fieldUpdatedAt = [:]
+            moments[moment.id] = moment
             return
         }
-        let replaced = previous?.updatedAt ?? deleted[moment.id]
-        moment.updatedAt = Self.stamp(now: now, after: replaced)
-        moments[moment.id] = moment
+        let changed = moment.changedFields(from: original ?? current)
+        guard !changed.isEmpty else { return }
+        var saved = current
+        saved.take(changed, from: moment, at: Self.stamp(now: now, after: current.updatedAt))
+        moments[moment.id] = saved
     }
 
     public mutating func delete(_ id: UUID, now: Date = .now) {
@@ -76,30 +81,21 @@ public struct MomentLibrary: Equatable, Sendable {
 
     // MARK: - Syncing
 
-    /// Merges what the sync folder has into this library.
-    ///
-    /// - Returns: The merged library, whose `synced` is the merge (the folder should be updated
-    ///   to match it), and the merged moments and deletions.
-    public func merging(folder remote: MomentSet, folderPath: String) -> (library: MomentLibrary, merged: MomentSet) {
-        // A base from another folder says nothing about this one.
-        let base = syncedFolder == folderPath ? synced : [:]
-        let merged = MomentMerge.merge(set, remote, base: base)
+    /// Merges another copy, e.g. the sync folder's, into this library.
+    public func merging(_ other: MomentSet) -> (library: MomentLibrary, merged: MomentSet) {
+        let merged = MomentMerge.merge(set, other)
         var library = self
         library.moments = merged.moments
         library.deleted = merged.deleted
-        library.synced = merged.moments
-        library.syncedFolder = folderPath
         return (library, merged)
     }
 
-    /// Folds in a sync that started from `snapshot`, keeping any edits made here since.
-    public func integrating(_ result: MomentLibrary, from snapshot: MomentLibrary) -> MomentLibrary {
-        guard self != snapshot else { return result }
-        // Both this library and the result grew from the snapshot, so it's their common base.
-        let merged = MomentMerge.merge(set, result.set, base: snapshot.moments)
-        var library = result
-        library.moments = merged.moments
-        library.deleted = merged.deleted
+    /// Folds in the result of a sync that started from an earlier copy of this library, keeping
+    /// any edits made here since.
+    public func integrating(_ result: MomentLibrary) -> MomentLibrary {
+        guard self != result else { return self }
+        var library = result.merging(set).library
+        library.backedUpFolder = result.backedUpFolder ?? backedUpFolder
         return library
     }
 }
@@ -108,33 +104,28 @@ public struct MomentLibrary: Equatable, Sendable {
 
 extension MomentLibrary: Codable {
     private enum CodingKeys: String, CodingKey {
-        case moments, deleted, synced, syncedFolder, backedUp
+        case moments, deleted, backedUpFolder
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let moments = try container.decodeIfPresent([Moment].self, forKey: .moments) ?? []
-        let synced = try container.decodeIfPresent([Moment].self, forKey: .synced) ?? []
         let deleted = try container.decodeIfPresent([String: String].self, forKey: .deleted) ?? [:]
-        self.moments = Dictionary(moments.map { ($0.id, $0) }, uniquingKeysWith: MomentMerge.newer)
-        self.synced = Dictionary(synced.map { ($0.id, $0) }, uniquingKeysWith: MomentMerge.newer)
+        self.moments = Dictionary(moments.map { ($0.id, $0) }, uniquingKeysWith: Moment.merged)
         self.deleted = deleted.reduce(into: [:]) { result, entry in
             if let id = UUID(uuidString: entry.key), let date = ISODate.parse(entry.value) {
                 result[id] = date
             }
         }
-        syncedFolder = try container.decodeIfPresent(String.self, forKey: .syncedFolder)
-        backedUp = try container.decodeIfPresent(Bool.self, forKey: .backedUp) ?? false
+        backedUpFolder = try container.decodeIfPresent(String.self, forKey: .backedUpFolder)
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(sortedMoments, forKey: .moments)
-        try container.encode(synced.values.sorted(by: Moment.listOrder), forKey: .synced)
         try container.encode(
             Dictionary(uniqueKeysWithValues: deleted.map { ($0.key.uuidString, ISODate.string($0.value)) }),
             forKey: .deleted)
-        try container.encodeIfPresent(syncedFolder, forKey: .syncedFolder)
-        try container.encode(backedUp, forKey: .backedUp)
+        try container.encodeIfPresent(backedUpFolder, forKey: .backedUpFolder)
     }
 }

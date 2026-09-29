@@ -196,9 +196,11 @@ struct SpanProgressTests {
         let calendar = seoul.calendar
         #expect(moment.progress(at: seoul.date(2025, 8, 1), calendar: calendar).detail == "Starts in 2 days")
         #expect(moment.progress(at: seoul.date(2025, 8, 1), calendar: calendar).fraction == 0)
-        #expect(moment.progress(at: seoul.date(2025, 8, 3, 8), calendar: calendar).detail == "Day 1 of 740")
-        #expect(moment.progress(at: seoul.date(2027, 8, 13), calendar: calendar).detail == "Ended")
-        #expect(moment.progress(at: seoul.date(2027, 8, 13), calendar: calendar).fraction == 1)
+        #expect(moment.progress(at: seoul.date(2025, 8, 3, 8), calendar: calendar).detail == "Day 1 of 741")
+        // The last day counts too.
+        #expect(moment.progress(at: seoul.date(2027, 8, 13, 18), calendar: calendar).detail == "Day 741 of 741")
+        #expect(moment.progress(at: seoul.date(2027, 8, 14), calendar: calendar).detail == "Ended")
+        #expect(moment.progress(at: seoul.date(2027, 8, 14), calendar: calendar).fraction == 1)
     }
 
     @Test func namesUnnamedProgressBars() {

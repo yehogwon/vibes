@@ -48,6 +48,29 @@ struct ReminderTests {
         #expect(reminder?.fire == seoul.date(2027, 10, 9, 9))
     }
 
+    @Test func weeklyMomentsWithLongNotice() {
+        // Every Tuesday, two weeks ahead: the reminder today is for the Tuesday after next.
+        let weekly = moment(on: 2026, 9, 1, remind: 14, repeating: .week)
+        let reminder = weekly.nextReminder(after: seoul.date(2026, 9, 28), calendar: seoul.calendar)
+        #expect(reminder?.fire == seoul.date(2026, 9, 29, 9))
+        #expect(reminder?.day == seoul.date(2026, 10, 13))
+    }
+
+    @Test func aWeekAheadOnTheDayItselfAfterTheReminderFired() {
+        // Tuesday, 10 am: today's reminder (for next Tuesday) has fired; next is the week after.
+        let weekly = moment(on: 2026, 9, 1, remind: 7, repeating: .week)
+        let reminder = weekly.nextReminder(after: seoul.date(2026, 9, 29, 10), calendar: seoul.calendar)
+        #expect(reminder?.fire == seoul.date(2026, 10, 6, 9))
+        #expect(reminder?.day == seoul.date(2026, 10, 13))
+    }
+
+    @Test func monthlyMomentsAMonthAheadAroundFebruary() {
+        let monthly = moment(on: 2026, 1, 15, remind: 30, repeating: .month)
+        let reminder = monthly.nextReminder(after: seoul.date(2026, 1, 20), calendar: seoul.calendar)
+        #expect(reminder?.day == seoul.date(2026, 3, 15))
+        #expect(reminder?.fire == seoul.date(2026, 2, 13, 9))
+    }
+
     @Test func noReminderMeansNone() {
         #expect(moment(on: 2026, 10, 10, remind: -1).nextReminder(after: seoul.date(2026, 9, 1)) == nil)
         var progress = Moment(kind: .progress, date: .now, createdAt: .now)

@@ -6,6 +6,8 @@ public enum JSONValue: Hashable, Sendable {
     case null
     case bool(Bool)
     case integer(Int64)
+    /// Only for whole numbers too big for `integer`.
+    case unsignedInteger(UInt64)
     case number(Double)
     case string(String)
     case array([JSONValue])
@@ -21,6 +23,8 @@ extension JSONValue: Codable {
             self = .bool(value)
         } else if let value = try? container.decode(Int64.self) {
             self = .integer(value)
+        } else if let value = try? container.decode(UInt64.self) {
+            self = .unsignedInteger(value)
         } else if let value = try? container.decode(Double.self) {
             self = .number(value)
         } else if let value = try? container.decode(String.self) {
@@ -38,6 +42,7 @@ extension JSONValue: Codable {
         case .null: try container.encodeNil()
         case .bool(let value): try container.encode(value)
         case .integer(let value): try container.encode(value)
+        case .unsignedInteger(let value): try container.encode(value)
         case .number(let value): try container.encode(value)
         case .string(let value): try container.encode(value)
         case .array(let value): try container.encode(value)

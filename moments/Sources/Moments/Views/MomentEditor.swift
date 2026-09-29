@@ -8,11 +8,19 @@ struct MomentEditor: View {
     @Environment(AppState.self) private var app
     @State private var draft: Moment
     @FocusState private var isNameFocused: Bool
+    /// The moment as editing began. Only what changed since is saved, so an edit arriving from
+    /// another Mac meanwhile survives.
+    let original: Moment
     let isNew: Bool
 
     init(moment: Moment, isNew: Bool) {
         _draft = State(initialValue: moment)
+        original = moment
         self.isNew = isNew
+    }
+
+    private func save() {
+        app.save(draft, editedFrom: isNew ? nil : original)
     }
 
     var body: some View {
@@ -23,7 +31,7 @@ struct MomentEditor: View {
                     .buttonStyle(.borderless)
                     .help("Back without saving (Esc)")
             } trailing: {
-                Button("Save") { app.save(draft) }
+                Button("Save", action: save)
                     .keyboardShortcut(.return, modifiers: .command)
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
@@ -57,7 +65,7 @@ struct MomentEditor: View {
                 TextField(namePlaceholder, text: $draft.name)
                     .textFieldStyle(.roundedBorder)
                     .focused($isNameFocused)
-                    .onSubmit { app.save(draft) }
+                    .onSubmit(save)
                     .onAppear {
                         if isNew {
                             isNameFocused = true
