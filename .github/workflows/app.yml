@@ -1,0 +1,137 @@
+name: App
+
+# Checks one app: builds it, runs its tests, opens it on each macOS it supports that GitHub has a
+# runner for, and checks its cask if it has one. ci.yml runs this for each app a PR changes, and
+# release.yml before publishing one, which then releases the zip built here.
+on:
+  workflow_call:
+    inputs:
+      app:
+        description: The app's folder, such as jots.
+        required: true
+        type: string
+      open-args:
+        description: Arguments to open the app with. Relative paths land in an empty folder.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+# The apps build with SwiftPM, but need Xcode's toolchain: the Command Line Tools lack SwiftUI's
+# macro plugin.
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+  APP: ${{ inputs.app }}
+  OPEN_ARGS: ${{ inputs.open-args }}
+  HOMEBREW_NO_AUTO_UPDATE: 1
+
+jobs:
+  build-test:
+    name: Build & test
+    runs-on: macos-26
+    timeout-minutes: 30
+    outputs:
+      name: ${{ steps.info.outputs.name }}
+      older-macos: ${{ steps.info.outputs.older-macos }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Apps are built on the newest macOS but run back to LSMinimumSystemVersion, so the app built
+      # here is opened on each older macOS it supports too. The macOS 14 runners have no Xcode that
+      # can build the packages, so only the macOS 15 ones run the tests.
+      - name: Read the app
+        id: info
+        run: |
+          plist="$APP/Resources/Info.plist"
+          name="$(plutil -extract CFBundleName raw "$plist")"
+          min="$(plutil -extract LSMinimumSystemVersion raw "$plist")"
+          runners='[
+            {"macos": 14, "xcode": ""},
+            {"macos": 15, "xcode": "/Applications/Xcode_26.3.app/Contents/Developer"}
+          ]'
+          {
+            echo "name=$name"
+            echo "older-macos=$(jq -c --argjson min "${min%%.*}" 'map(select(.macos >= $min))' <<<"$runners")"
+          } >> "$GITHUB_OUTPUT"
+          echo "NAME=$name" >> "$GITHUB_ENV"
+          swift --version
+
+      - name: Build
+        run: |
+          "$APP/build.sh"
+
+      - name: Test
+        run: swift test --package-path "$APP"
+
+      - name: Open
+        run: |
+          # OPEN_ARGS is split into words on purpose.
+          # shellcheck disable=SC2086
+          .github/scripts/open-app.sh "$APP/build/$NAME.app" $OPEN_ARGS
+
+      # Zipped with ditto first: upload-artifact drops the executable bit.
+      - name: Package
+        run: ditto -c -k --keepParent "$APP/build/$NAME.app" "$RUNNER_TEMP/$NAME.zip"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.app }}
+          path: ${{ runner.temp }}/${{ env.NAME }}.zip
+          retention-days: 1
+
+  older-macos:
+    name: macOS ${{ matrix.macos }}
+    needs: build-test
+    if: needs.build-test.outputs.older-macos != '[]'
+    runs-on: macos-${{ matrix.macos }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.build-test.outputs.older-macos) }}
+    env:
+      NAME: ${{ needs.build-test.outputs.name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.app }}
+          path: ${{ runner.temp }}
+
+      - name: Open
+        run: |
+          ditto -x -k "$RUNNER_TEMP/$NAME.zip" "$RUNNER_TEMP"
+          # OPEN_ARGS is split into words on purpose.
+          # shellcheck disable=SC2086
+          .github/scripts/open-app.sh "$RUNNER_TEMP/$NAME.app" $OPEN_ARGS
+
+      - name: Test
+        if: matrix.xcode
+        env:
+          DEVELOPER_DIR: ${{ matrix.xcode }}
+        run: swift test --package-path "$APP"
+
+  # Beside the build rather than after it, so it doesn't make the run any longer. The audit doesn't
+  # download the app, so any checksum passes; release.yml audits the cask again with the real one.
+  cask:
+    name: Cask
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Audit the cask
+        if: hashFiles(format('{0}/cask.sh', inputs.app)) != ''
+        run: |
+          version="$(plutil -extract CFBundleShortVersionString raw "$APP/Resources/Info.plist")"
+          mkdir -p "$RUNNER_TEMP/tap/Casks"
+          "$APP/cask.sh" "$version" "$(printf '%064d' 0)" > "$RUNNER_TEMP/tap/Casks/$APP.rb"
+          .github/scripts/audit-casks.sh "$RUNNER_TEMP/tap" "$APP"

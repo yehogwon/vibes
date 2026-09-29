@@ -1,2 +1,3 @@
 - Never edit README unless the user explicitly asks you to do so.
-- Jots ships through Homebrew: merging a bump of `CFBundleShortVersionString` in `jots/Resources/Info.plist` into main releases it, and the cask comes from `jots/cask.sh` (never edit it in `yehogwon/homebrew-vibes`), whose quarantine-clearing `postflight` must not become `postflight_steps`.
+- Apps with a `cask.sh` (Jots, Moments) ship through Homebrew: merging a bump of `CFBundleShortVersionString` in `<app>/Resources/Info.plist` into main releases it, and the cask comes from `<app>/cask.sh` (never edit casks in `yehogwon/homebrew-vibes`), whose quarantine-clearing `postflight` must not become `postflight_steps`.
+- main requires one check, "CI", from `.github/workflows/ci.yml`. A new app needs its own job there, listed in the CI job's `needs`.

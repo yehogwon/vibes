@@ -2,7 +2,7 @@
 # Builds Moments.app from the SwiftPM package. Xcode has to be installed (the Command Line Tools
 # lack SwiftUI's macro plugin), but it never opens.
 #
-#   ./build.sh           build a release Moments.app into build/
+#   ./build.sh           build a release Moments.app (Apple silicon and Intel) into build/
 #   ./build.sh debug     build a debug copy instead
 #   ./build.sh run       build a debug copy and open it (it appears in the menu bar)
 #   ./build.sh install   build a release copy into ~/Applications and open it
@@ -30,9 +30,15 @@ esac
 
 cd "$ROOT"
 
+BUILD=(-c "$CONFIG" --product Moments)
+# Release builds also run on Intel Macs.
+if [ "$CONFIG" = release ]; then
+  BUILD+=(--arch arm64 --arch x86_64)
+fi
+
 echo "==> Compiling ($CONFIG)"
-swift build -c "$CONFIG" --product Moments
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/Moments"
+swift build "${BUILD[@]}"
+BIN="$(swift build "${BUILD[@]}" --show-bin-path)/Moments"
 
 # The icon only changes when its script does, so it's drawn again only then.
 if [ Tools/MakeIcon.swift -nt "$ICON" ]; then

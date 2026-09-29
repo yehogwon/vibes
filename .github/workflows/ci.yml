@@ -1,0 +1,107 @@
+name: CI
+
+# Runs on every new tip of a PR into main (opened, synchronize, reopened). It checks only the apps
+# the PR changes, or all of them when it changes .github/. The "CI" job at the end passes only if
+# everything else passed or was skipped, so it's the one check main requires, whichever apps a PR
+# touches and however many there are.
+#
+# An app is a folder with a build.sh. Each needs a job below, and a place in the CI job's needs.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      apps: ${{ steps.diff.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: List the apps to check
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          # A PR is checked out as its merge into main, whose first parent is main.
+          if [ "$EVENT" = pull_request ]; then
+            changed="$(git diff --name-only HEAD^1 HEAD)"
+          fi
+          apps=()
+          for build in */build.sh; do
+            app="${build%/build.sh}"
+            if ! grep -q "^      app: $app$" .github/workflows/ci.yml; then
+              echo "::error::$app has no job in ci.yml."
+              exit 1
+            fi
+            if [ "$EVENT" != pull_request ] || grep -q -e "^$app/" -e '^\.github/' <<<"$changed"; then
+              apps+=("$app")
+            fi
+          done
+          json="$(printf '%s\n' "${apps[@]}" | jq -Rnc '[inputs | select(. != "")]')"
+          echo "Checking: $json"
+          echo "apps=$json" >> "$GITHUB_OUTPUT"
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # actionlint also runs shellcheck on each workflow's scripts.
+      - name: Lint the workflows
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12 "$RUNNER_TEMP"
+          "$RUNNER_TEMP/actionlint" -color
+
+      - name: Lint the scripts
+        run: shellcheck ./*/*.sh .github/scripts/*.sh
+
+  jots:
+    name: Jots
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.apps), 'jots')
+    uses: ./.github/workflows/app.yml
+    with:
+      app: jots
+
+  moments:
+    name: Moments
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.apps), 'moments')
+    uses: ./.github/workflows/app.yml
+    with:
+      app: moments
+      # Kept to folders of its own, and made to sync through one.
+      open-args: -MomentsSyncFolder cloud -MomentsLocalFolder local
+
+  ci:
+    name: CI
+    needs: [changes, lint, jots, moments]
+    # Also when a job fails or is cancelled, since a required check that's skipped counts as passed.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the other jobs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$NEEDS"
+          jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<<"$NEEDS" >/dev/null
