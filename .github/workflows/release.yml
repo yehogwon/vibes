@@ -8,7 +8,8 @@ name: Release
 # A push that changes no version and no cask finds everything up to date and stops there.
 #
 # Pushing to the tap takes a deploy key with write access to yehogwon/homebrew-vibes, whose private
-# half is this repository's HOMEBREW_TAP_DEPLOY_KEY secret.
+# half is the HOMEBREW_TAP_DEPLOY_KEY secret of this repository's release environment, which only
+# main can use.
 on:
   push:
     branches: [main]
@@ -117,6 +118,7 @@ jobs:
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: macos-26
     timeout-minutes: 15
+    environment: release
     env:
       APPS: ${{ needs.plan.outputs.apps }}
       HOMEBREW_NO_AUTO_UPDATE: 1
