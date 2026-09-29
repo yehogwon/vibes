@@ -3,8 +3,8 @@ import MomentsCore
 
 /// The menu bar items: the app's own icon, and one for each moment shown in the menu bar.
 ///
-/// Every item opens the list the same way: rest the pointer on it to peek, click to pin, and
-/// right-click (or Control-click) for a menu.
+/// Resting the pointer on any of them shows the list; right-clicking (or Control-clicking) shows
+/// a menu.
 @MainActor
 final class StatusItems: NSObject {
     struct Handlers {
@@ -19,7 +19,9 @@ final class StatusItems: NSObject {
     private var items: [UUID: NSStatusItem] = [:]
     /// What each moment's item shows, so unchanged items aren't redrawn every tick.
     private var shown: [UUID: ItemContent] = [:]
-    private var hoverRelays: [ObjectIdentifier: HoverRelay] = [:]
+    /// The item the pointer is on, if any.
+    private weak var hovered: NSStatusBarButton?
+    private var pointerMonitors: [Any] = []
 
     init(handlers: Handlers) {
         self.handlers = handlers
@@ -29,6 +31,7 @@ final class StatusItems: NSObject {
         item.button?.image = NSImage(systemSymbolName: "calendar.badge.clock", accessibilityDescription: "Moments")
         configure(item)
         main = item
+        watchPointer()
     }
 
     /// Adds, updates, and removes the moments' own items.
@@ -36,9 +39,6 @@ final class StatusItems: NSObject {
         let pinned = moments.filter(\.inMenubar)
         let ids = Set(pinned.map(\.id))
         for (id, item) in items where !ids.contains(id) {
-            if let button = item.button {
-                hoverRelays[ObjectIdentifier(button)] = nil
-            }
             NSStatusBar.system.removeStatusItem(item)
             items[id] = nil
             shown[id] = nil
@@ -69,14 +69,6 @@ final class StatusItems: NSObject {
         button.target = self
         button.action = #selector(buttonClicked(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        let relay = HoverRelay(
-            entered: { [handlers, weak button] in if let button { handlers.pointerEntered(button) } },
-            exited: { [handlers, weak button] in if let button { handlers.pointerExited(button) } })
-        hoverRelays[ObjectIdentifier(button)] = relay
-        button.addTrackingArea(
-            NSTrackingArea(
-                rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: relay,
-                userInfo: nil))
     }
 
     @objc private func buttonClicked(_ sender: NSStatusBarButton) {
@@ -97,7 +89,45 @@ final class StatusItems: NSObject {
         button.performClick(nil)
         item.menu = nil
     }
+
+    // MARK: - Hover
+
+    /// Follows the pointer to tell when it arrives on or leaves an item.
+    ///
+    /// The system draws every app's items into one menu bar, and a tracking area on an item's
+    /// button doesn't reliably hear the pointer arrive, so this watches the pointer move instead:
+    /// everywhere (the global monitor), and over this app's own windows (the local one). Neither
+    /// needs any permission for mouse movement.
+    private func watchPointer() {
+        pointerMonitors.append(
+            NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
+                MainActor.assumeIsolated { self?.pointerMoved() }
+            } as Any)
+        pointerMonitors.append(
+            NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] event in
+                MainActor.assumeIsolated { self?.pointerMoved() }
+                return event
+            } as Any)
+    }
+
+    private func pointerMoved() {
+        let location = NSEvent.mouseLocation
+        let buttons = ([main] + Array(items.values)).compactMap(\.button)
+        let over = buttons.first { button in
+            guard let window = button.window else { return false }
+            return window.convertToScreen(button.convert(button.bounds, to: nil)).contains(location)
+        }
+        guard over !== hovered else { return }
+        if let hovered {
+            handlers.pointerExited(hovered)
+        }
+        hovered = over
+        if let over {
+            handlers.pointerEntered(over)
+        }
+    }
 }
+
 
 /// What a moment's menu bar item shows: "🎂 D-12", a photo and "D-12", a ring and "74%".
 private struct ItemContent: Equatable {
@@ -170,21 +200,4 @@ private struct ItemContent: Equatable {
             return true
         }
     }
-}
-
-/// Receives a tracking area's enter and exit messages.
-private final class HoverRelay: NSResponder {
-    private let entered: () -> Void
-    private let exited: () -> Void
-
-    init(entered: @escaping () -> Void, exited: @escaping () -> Void) {
-        self.entered = entered
-        self.exited = exited
-        super.init()
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    override func mouseEntered(with event: NSEvent) { entered() }
-    override func mouseExited(with event: NSEvent) { exited() }
 }

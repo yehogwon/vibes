@@ -5,8 +5,8 @@ import SwiftUI
 ///
 /// Resting the pointer on the item *peeks* at the list: the panel fades in without taking focus
 /// from the app in front, and fades out once the pointer leaves both the item and the panel.
-/// Clicking the item, or anywhere in the panel, *pins* it: it takes keyboard focus for editing
-/// and stays until Esc, a click elsewhere, or another click on the item.
+/// Nothing needs a click on the item. Clicking in the panel (a moment, +, a field) *pins* it for
+/// editing: it takes keyboard focus and stays until Esc or a click elsewhere.
 @MainActor
 final class PanelController {
     enum Mode {
@@ -93,24 +93,27 @@ final class PanelController {
         }
     }
 
+    /// A click on an item does what resting the pointer on it does, without the wait: it shows
+    /// the list. It never pins or closes it, so a habitual click can't get in the way. With
+    /// hovering turned off in Settings, a click opens and closes the list instead.
     func clicked(_ button: NSStatusBarButton) {
         pendingPeek?.cancel()
+        guard state.opensOnHover else {
+            if mode == .hidden {
+                show(from: button, pinned: true)
+            } else {
+                close()
+            }
+            return
+        }
         switch mode {
         case .hidden:
-            show(from: button, pinned: true)
-        case .peeking:
-            if button !== anchor {
-                anchor = button
-                move(to: targetFrame(), animated: true)
-            }
-            pin()
-        case .pinned:
-            if button === anchor {
-                close()
-            } else {
-                anchor = button
-                move(to: targetFrame(), animated: true)
-            }
+            show(from: button, pinned: false)
+        case .peeking where button !== anchor, .pinned where button !== anchor:
+            anchor = button
+            move(to: targetFrame(), animated: true)
+        default:
+            break
         }
     }
 
@@ -123,6 +126,7 @@ final class PanelController {
             pin()
         }
     }
+
 
     // MARK: - Showing and hiding
 
