@@ -1,0 +1,204 @@
+name: Release
+
+# Publishes the apps from main through Homebrew. An app ships once it has a cask.sh, and bumping
+# CFBundleShortVersionString in its Resources/Info.plist is all a release takes: if there's no
+# <app>-v<version> release for that version yet, app.yml checks the app as CI does, and the zip it
+# built is attached to a new release. Then each app's cask (<app>/cask.sh) for its current release
+# is written into yehogwon/homebrew-vibes, which `brew install --cask yehogwon/vibes/<app>` reads.
+# A push that changes no version and no cask finds everything up to date and stops there.
+#
+# Pushing to the tap takes a deploy key with write access to yehogwon/homebrew-vibes, whose private
+# half is this repository's HOMEBREW_TAP_DEPLOY_KEY secret.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One at a time, and never cancelled halfway through a release.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  plan:
+    name: Plan
+    # workflow_dispatch can run from any branch, but only main is released.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      apps: ${{ steps.plan.outputs.apps }}
+      unreleased: ${{ steps.plan.outputs.unreleased }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Find unreleased versions
+        id: plan
+        run: |
+          # Ubuntu has no plutil.
+          plist() {
+            python3 -c 'import plistlib, sys; print(plistlib.load(open(sys.argv[1], "rb"))[sys.argv[2]])' "$@"
+          }
+          printf '| App | Version | |\n| --- | --- | --- |\n' >> "$GITHUB_STEP_SUMMARY"
+          apps='[]'
+          for cask in */cask.sh; do
+            app="${cask%/cask.sh}"
+            name="$(plist "$app/Resources/Info.plist" CFBundleName)"
+            version="$(plist "$app/Resources/Info.plist" CFBundleShortVersionString)"
+            if gh release view "$app-v$version" >/dev/null 2>&1; then
+              released=true
+              echo "| $name | $version | Already released |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              released=false
+              echo "| $name | $version | **New** |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            apps="$(jq -c --arg app "$app" --arg name "$name" --arg version "$version" \
+              --argjson released "$released" '. + [$ARGS.named]' <<<"$apps")"
+          done
+          jq . <<<"$apps"
+          {
+            echo "apps=$apps"
+            echo "unreleased=$(jq -c 'map(select(.released | not))' <<<"$apps")"
+          } >> "$GITHUB_OUTPUT"
+
+  check:
+    name: ${{ matrix.name }}
+    needs: plan
+    if: needs.plan.outputs.unreleased != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.unreleased) }}
+    uses: ./.github/workflows/app.yml
+    with:
+      app: ${{ matrix.app }}
+
+  publish:
+    name: Publish ${{ matrix.name }} ${{ matrix.version }}
+    needs: [plan, check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.unreleased) }}
+    env:
+      APP: ${{ matrix.app }}
+      NAME: ${{ matrix.name }}
+      VERSION: ${{ matrix.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.app }}
+          path: ${{ runner.temp }}
+
+      - name: Release
+        run: |
+          zip="$RUNNER_TEMP/$NAME-$VERSION.zip"
+          mv "$RUNNER_TEMP/$NAME.zip" "$zip"
+          gh release create "$APP-v$VERSION" "$zip" --target "$GITHUB_SHA" --title "$NAME $VERSION" \
+            --notes "Install with \`brew install --cask yehogwon/vibes/$APP\`."
+
+  # Runs even when a release above failed, and keeps that app's cask as it was.
+  tap:
+    name: Update the tap
+    needs: [plan, publish]
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    runs-on: macos-26
+    timeout-minutes: 15
+    env:
+      APPS: ${{ needs.plan.outputs.apps }}
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check out the tap
+        uses: actions/checkout@v7
+        with:
+          repository: yehogwon/homebrew-vibes
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          path: tap
+
+      # The checksums come from the published zips, so each cask matches what Homebrew downloads.
+      - name: Write the casks
+        id: casks
+        run: |
+          mkdir -p tap/Casks
+          casks=()
+          titles=()
+          while IFS=$'\t' read -r app name version; do
+            tag="$app-v$version"
+            zip="$name-$version.zip"
+            if ! gh release view "$tag" >/dev/null 2>&1; then
+              echo "::warning::$tag isn't released, so the $app cask stays as it was."
+              continue
+            fi
+            gh release download "$tag" -p "$zip" -D "$RUNNER_TEMP/$app"
+            sha256="$(shasum -a 256 "$RUNNER_TEMP/$app/$zip" | cut -d ' ' -f 1)"
+            "$app/cask.sh" "$version" "$sha256" > "tap/Casks/$app.rb"
+            if [ -n "$(git -C tap status --porcelain "Casks/$app.rb")" ]; then
+              casks+=("$app")
+              titles+=("$name $version")
+            fi
+          done < <(jq -r '.[] | [.app, .name, .version] | @tsv' <<<"$APPS")
+
+          {
+            echo '# yehogwon/vibes'
+            echo
+            echo 'Homebrew casks for the apps in [yehogwon/vibes](https://github.com/yehogwon/vibes).'
+            echo
+            for cask in tap/Casks/*.rb; do
+              echo "    brew install --cask yehogwon/vibes/$(basename "$cask" .rb)"
+            done
+            echo
+            echo 'The casks are written by the release workflow in yehogwon/vibes, so edit them there.'
+          } > tap/README.md
+
+          if [ -z "$(git -C tap status --porcelain)" ]; then
+            echo "The tap is up to date."
+          fi
+          subject="List the casks in the README"
+          if [ ${#titles[@]} -gt 0 ]; then
+            printf -v subject '%s, ' "${titles[@]}"
+            subject="${subject%, }"
+          fi
+          {
+            echo "casks=${casks[*]}"
+            echo "subject=$subject"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Audit the casks
+        if: steps.casks.outputs.casks != ''
+        env:
+          CASKS: ${{ steps.casks.outputs.casks }}
+        run: |
+          # CASKS is split into words on purpose.
+          # shellcheck disable=SC2086
+          .github/scripts/audit-casks.sh tap $CASKS
+
+      - name: Push the tap
+        working-directory: tap
+        env:
+          SUBJECT: ${{ steps.casks.outputs.subject }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            exit 0
+          fi
+          git add -A
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "$SUBJECT" -m "From yehogwon/vibes@$GITHUB_SHA"
+          git push origin HEAD
