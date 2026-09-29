@@ -40,7 +40,7 @@ final class PanelController {
     /// as the pointer passes along the menu bar.
     private let peekDelay: Duration = .milliseconds(140)
     /// How long the pointer can be outside before a peeking panel closes.
-    private let leaveGrace: TimeInterval = 0.3
+    private let leaveGrace: TimeInterval = 0.08
 
     init(state: AppState) {
         self.state = state
@@ -177,8 +177,8 @@ final class PanelController {
         let current = generation
         let frame = panel.frame.offsetBy(dx: 0, dy: 5)
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.16
-            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            context.duration = 0.1
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             panel.animator().alphaValue = 0
             panel.animator().setFrame(frame, display: true)
         } completionHandler: {
@@ -256,7 +256,7 @@ final class PanelController {
     /// watches where the pointer is instead.
     private func startLeaveTimer() {
         stopLeaveTimer()
-        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.02, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.checkPointer() }
         }
         RunLoop.main.add(timer, forMode: .common)
