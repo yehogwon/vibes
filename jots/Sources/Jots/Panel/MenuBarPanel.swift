@@ -161,8 +161,11 @@ final class MenuBarPanel: NSPanel {
             x: bounds.minX + layer.anchorPoint.x * bounds.width, y: bounds.minY + layer.anchorPoint.y * bounds.height)
         let dx = bounds.minX + zoomOrigin.x - anchor.x
         let dy = bounds.minY + zoomOrigin.y - anchor.y
-        let toOrigin = CATransform3DMakeTranslation(-dx, -dy, 0)
-        let scaled = CATransform3DScale(toOrigin, factor, factor, 1)
+        // Moves the zoom origin onto the anchor, scales, and moves it back. `CATransform3DConcat(a, b)`
+        // applies `a` first; `CATransform3DScale(t, …)` would scale before `t`, and zoom about the
+        // corner instead.
+        let toAnchor = CATransform3DMakeTranslation(-dx, -dy, 0)
+        let scaled = CATransform3DConcat(toAnchor, CATransform3DMakeScale(factor, factor, 1))
         return CATransform3DConcat(scaled, CATransform3DMakeTranslation(dx, dy, 0))
     }
 
