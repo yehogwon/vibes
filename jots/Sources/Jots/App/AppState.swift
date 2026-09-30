@@ -29,7 +29,7 @@ final class AppState {
     }
     private(set) var hotKeyError: String?
 
-    /// Set by the app delegate, which owns the popover.
+    /// Set by the app delegate, which owns the panel.
     @ObservationIgnored var closeScratchpad: () -> Void = {}
     @ObservationIgnored var toggleScratchpad: () -> Void = {}
 

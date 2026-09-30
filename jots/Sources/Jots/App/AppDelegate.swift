@@ -1,15 +1,15 @@
 import AppKit
 import SwiftUI
 
-/// Owns the menu bar icon and the scratchpad popover.
+/// Owns the menu bar icon and the scratchpad panel under it.
 ///
-/// Click the icon to open or close the scratchpad; right-click (or Control-click) for a menu.
+/// Rest the pointer on the icon to peek at the scratchpad, click it to type; right-click (or
+/// Control-click) for a menu.
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private let state = AppState()
     private var statusItem: NSStatusItem?
-    private let popover = NSPopover()
-    private var isFadingOut = false
+    private var panel: PanelController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // With no windows open, macOS would otherwise consider the app idle and quit it,
@@ -25,48 +25,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         statusItem = item
+        if let button = item.button {
+            panel = PanelController(state: state, button: button)
+        }
 
         state.closeScratchpad = { [weak self] in self?.closeScratchpad(nil) }
-        state.toggleScratchpad = { [weak self] in self?.toggleScratchpad() }
-        popover.behavior = .transient
-        popover.contentSize = NSSize(width: 480, height: 560)
-        popover.delegate = self
-        let content = NSHostingController(rootView: ScratchpadView().environment(state))
-        // The popover's size is fixed here; don't let SwiftUI's ideal size override it.
-        content.sizingOptions = []
-        popover.contentViewController = content
-
+        state.toggleScratchpad = { [weak self] in self?.panel?.toggle() }
         state.start()
-    }
-
-    /// Every close goes through here (Esc, ⌘W, the shortcut, clicking the icon or elsewhere), so
-    /// every close fades out.
-    func popoverShouldClose(_ popover: NSPopover) -> Bool {
-        fadeOutScratchpad()
-        return false
-    }
-
-    /// A popover that's the key window disappears at once instead of animating out, and the
-    /// scratchpad has to be key to take typing. So fade it out here, then close it unanimated.
-    private func fadeOutScratchpad() {
-        guard !isFadingOut, let window = popover.contentViewController?.view.window else { return }
-        isFadingOut = true
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.15
-            window.animator().alphaValue = 0
-        } completionHandler: {
-            MainActor.assumeIsolated {
-                self.popover.animates = false
-                self.popover.close()
-                self.popover.animates = true
-                window.alphaValue = 1
-                self.isFadingOut = false
-            }
-        }
-    }
-
-    func popoverDidClose(_ notification: Notification) {
-        state.file.flush()
     }
 
     // MARK: - Status item
@@ -74,11 +39,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
         let event = NSApp.currentEvent
         if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            // Don't peek under the menu.
+            panel?.cancelPeek()
             showStatusMenu(from: sender)
-        } else if popover.isShown {
-            closeScratchpad(sender)
         } else {
-            openScratchpad(sender)
+            panel?.clicked()
         }
     }
 
@@ -106,25 +71,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     // MARK: - Actions
 
     @objc func openScratchpad(_ sender: Any?) {
-        guard let button = statusItem?.button, !popover.isShown else { return }
-        // An accessory app has to activate itself before its popover can take keyboard focus.
-        NSApp.activate()
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        popover.contentViewController?.view.window?.makeKey()
-    }
-
-    private func toggleScratchpad() {
-        if popover.isShown {
-            closeScratchpad(nil)
-        } else {
-            openScratchpad(nil)
-        }
+        panel?.open()
     }
 
     @objc func closeScratchpad(_ sender: Any?) {
-        if popover.isShown {
-            popover.performClose(sender)
-        }
+        panel?.close()
     }
 
     @objc func copyAll(_ sender: Any?) {

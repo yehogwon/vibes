@@ -3,8 +3,9 @@ import SwiftUI
 
 /// The panel that hangs under a menu bar item and lists the moments.
 ///
-/// Resting the pointer on the item *peeks* at the list: the panel fades in without taking focus
-/// from the app in front, and fades out once the pointer leaves both the item and the panel.
+/// Resting the pointer on the item *peeks* at the list: the panel zooms in from the item without
+/// taking focus from the app in front, and zooms back out to it once the pointer leaves both the
+/// item and the panel.
 /// Nothing needs a click on the item. Clicking in the panel (a moment, +, a field) *pins* it for
 /// editing: it takes keyboard focus and stays until Esc or a click elsewhere.
 @MainActor
@@ -18,7 +19,7 @@ final class PanelController {
     static let width: CGFloat = 360
 
     private(set) var mode = Mode.hidden
-    private let panel = FloatingPanel()
+    private let panel = MenuBarPanel(width: PanelController.width)
     private let state: AppState
     private weak var anchor: NSStatusBarButton?
     /// Where the panel hangs when its item goes away, e.g. a moment taken out of the menu bar
@@ -29,9 +30,6 @@ final class PanelController {
     private var pendingPeek: Task<Void, Never>?
     private var leaveTimer: Timer?
     private var pointerLeftAt: Date?
-    /// Bumped by every show and hide, so a finished fade-out doesn't hide a panel that has
-    /// since been shown again.
-    private var generation = 0
     private var outsideClickMonitor: Any?
     private var keyMonitor: Any?
     private var resignObserver: NSObjectProtocol?
@@ -49,7 +47,7 @@ final class PanelController {
         let hosting = NSHostingView(rootView: content)
         // The panel's frame is set here, following the content; SwiftUI mustn't resize it.
         hosting.sizingOptions = []
-        panel.contentView = Self.background(around: hosting)
+        panel.setContent(hosting)
         // Lay the content out now, so the first peek already knows how tall it is.
         hosting.frame = NSRect(x: 0, y: 0, width: Self.width, height: 600)
         hosting.layoutSubtreeIfNeeded()
@@ -59,45 +57,8 @@ final class PanelController {
         }
         state.closePanel = { [weak self] in self?.close() }
         state.lowerPanel = { [weak self] lowered in
-            self?.panel.level = lowered ? .floating : FloatingPanel.standardLevel
+            self?.panel.level = lowered ? .floating : MenuBarPanel.standardLevel
         }
-    }
-
-    /// Liquid Glass where there is Liquid Glass; before it, the material menus and popovers use, in
-    /// the same rounded shape.
-    private static func background(around content: NSView) -> NSView {
-        if #available(macOS 26, *) {
-            let glass = NSGlassEffectView()
-            glass.cornerRadius = 18
-            glass.contentView = content
-            return glass
-        }
-        let material = NSVisualEffectView()
-        material.material = .popover
-        material.state = .active
-        material.maskImage = roundedMask(radius: 12)
-        content.translatesAutoresizingMaskIntoConstraints = false
-        material.addSubview(content)
-        NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: material.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: material.trailingAnchor),
-            content.topAnchor.constraint(equalTo: material.topAnchor),
-            content.bottomAnchor.constraint(equalTo: material.bottomAnchor),
-        ])
-        return material
-    }
-
-    /// A stretchable rounded rectangle. As a material's mask it also shapes the window's shadow.
-    private static func roundedMask(radius: CGFloat) -> NSImage {
-        let side = radius * 2 + 1
-        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
-            NSColor.black.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-            return true
-        }
-        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
-        image.resizingMode = .stretch
-        return image
     }
 
     // MARK: - Pointer and clicks
@@ -166,28 +127,16 @@ final class PanelController {
 
     private func show(from button: NSStatusBarButton, pinned: Bool) {
         anchor = button
-        generation += 1
-        let frame = targetFrame()
-        // Start a little higher and transparent, then settle into place.
-        panel.alphaValue = 0
-        panel.setFrame(frame.offsetBy(dx: 0, dy: Self.reducesMotion ? 0 : 8), display: false)
         NSApp.unhideWithoutActivation()
         if pinned {
             mode = .pinned
             NSApp.activate()
-            panel.makeKeyAndOrderFront(nil)
             startPinnedMonitors()
         } else {
             mode = .peeking
-            panel.orderFrontRegardless()
             startLeaveTimer()
         }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1)
-            panel.animator().alphaValue = 1
-            panel.animator().setFrame(frame, display: true)
-        }
+        panel.zoomIn(to: targetFrame(), fromItemAt: itemMidX, key: pinned)
         state.store.sync()
     }
 
@@ -207,26 +156,14 @@ final class PanelController {
         pendingPeek?.cancel()
         stopLeaveTimer()
         stopPinnedMonitors()
-        generation += 1
-        let current = generation
-        let frame = panel.frame.offsetBy(dx: 0, dy: Self.reducesMotion ? 0 : 5)
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.1
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().alphaValue = 0
-            panel.animator().setFrame(frame, display: true)
-        } completionHandler: {
-            MainActor.assumeIsolated {
-                guard current == self.generation else { return }
-                self.panel.orderOut(nil)
-                // An unsaved edit is still there next time; settings aren't.
-                if self.state.route == .settings {
-                    self.state.route = .list
-                }
-                // Hand focus back to the app that had it before the panel was pinned.
-                if wasActive, NSApp.isActive {
-                    NSApp.hide(nil)
-                }
+        panel.zoomOut(toItemAt: itemMidX) {
+            // An unsaved edit is still there next time; settings aren't.
+            if self.state.route == .settings {
+                self.state.route = .list
+            }
+            // Hand focus back to the app that had it before the panel was pinned.
+            if wasActive, NSApp.isActive {
+                NSApp.hide(nil)
             }
         }
     }
@@ -252,7 +189,7 @@ final class PanelController {
         }
     }
 
-    /// With Reduce Motion on, the panel only fades: it doesn't slide in or out, or glide between
+    /// With Reduce Motion on, the panel only fades: it doesn't zoom in or out, or glide between
     /// items and heights.
     private static var reducesMotion: Bool {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -265,6 +202,11 @@ final class PanelController {
             return anchor
         }
         return fallbackAnchor()
+    }
+
+    /// The middle of the item the panel hangs from, on screen, which it zooms in from and out to.
+    private var itemMidX: CGFloat {
+        placement.flatMap(Self.screenRect)?.midX ?? targetFrame().midX
     }
 
     /// Under the item, centered on it, kept on its screen. Just under the menu bar if there's
@@ -377,39 +319,5 @@ final class PanelController {
     /// Esc while typing Hangul (or any input method) cancels the composition, not the panel.
     private static var isComposingText: Bool {
         (NSApp.keyWindow?.firstResponder as? NSTextView)?.hasMarkedText() == true
-    }
-}
-
-/// A borderless panel that can take keyboard focus without activating the app when it's shown,
-/// and reports clicks so a peeking panel can pin itself before the click lands.
-final class FloatingPanel: NSPanel {
-    static let standardLevel = NSWindow.Level.statusBar
-
-    var onMouseDown: () -> Void = {}
-
-    init() {
-        super.init(
-            contentRect: NSRect(x: 0, y: 0, width: PanelController.width, height: 120),
-            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
-        isFloatingPanel = true
-        level = Self.standardLevel
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
-        backgroundColor = .clear
-        isOpaque = false
-        hasShadow = true
-        hidesOnDeactivate = false
-        isMovable = false
-        isReleasedWhenClosed = false
-        animationBehavior = .none
-    }
-
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
-
-    override func sendEvent(_ event: NSEvent) {
-        if [.leftMouseDown, .rightMouseDown, .otherMouseDown].contains(event.type) {
-            onMouseDown()
-        }
-        super.sendEvent(event)
     }
 }

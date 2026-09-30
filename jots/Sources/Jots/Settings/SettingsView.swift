@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.fontFamily) private var fontFamily = EditorFontFamily.system
     @AppStorage(SettingsKey.fontSize) private var fontSize = 14.0
     @AppStorage(SettingsKey.hidesSyntax) private var hidesSyntax = true
+    @AppStorage(SettingsKey.opensOnHover) private var opensOnHover = true
 
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginItemMessage: String?
@@ -29,6 +30,7 @@ struct SettingsView: View {
                     }
                     .font(.subheadline)
                 }
+                Toggle("Show the scratchpad when the pointer rests on the menu bar icon", isOn: $opensOnHover)
                 Toggle("Open Jots at login", isOn: $opensAtLogin)
                     .onChange(of: opensAtLogin) { _, enabled in updateLoginItem(enabled) }
                 if let loginItemMessage {
