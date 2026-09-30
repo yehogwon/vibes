@@ -30,6 +30,16 @@ esac
 
 cd "$ROOT"
 
+# The oldest macOS Moments runs on. Package.swift has to agree, since the compiler checks what the
+# code calls against its deployment target.
+MIN_MACOS="$(plutil -extract LSMinimumSystemVersion raw Resources/Info.plist)"
+PACKAGE_MIN_MACOS="$(swift package dump-package | plutil -extract platforms.0.version raw -o - -)"
+if [ "$PACKAGE_MIN_MACOS" != "$MIN_MACOS" ]; then
+  echo "Package.swift targets macOS $PACKAGE_MIN_MACOS, but Info.plist says $MIN_MACOS." >&2
+  exit 1
+fi
+SDK="$(xcrun --show-sdk-version)"
+
 BUILD=(-c "$CONFIG" --product Moments)
 # Release builds also run on Intel Macs.
 if [ "$CONFIG" = release ]; then
@@ -50,10 +60,25 @@ fi
 echo "==> Assembling bundle"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/Moments"
+# SwiftPM tells the linker the SDK is as old as the deployment target, and newer macOS then runs the
+# app in compatibility mode, without its current look. So the real SDK version is written in here.
+# (Passing it to the linker instead breaks with some SwiftPM versions, which hand -Xlinker flags to
+# clang as they are.)
+vtool -set-build-version macos "$MIN_MACOS" "$SDK" -replace -output "$APP/Contents/MacOS/Moments" "$BIN"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
+
+# Every slice has to say what was asked for above, or the app would refuse to open on older macOS,
+# or look dated on newer.
+echo "==> Checking the binary"
+MINOS="$(vtool -show-build "$APP/Contents/MacOS/Moments" | awk '$1 == "minos" { print $2 }' | sort -u)"
+BUILT_SDK="$(vtool -show-build "$APP/Contents/MacOS/Moments" | awk '$1 == "sdk" { print $2 }' | sort -u)"
+if [ "$MINOS" != "$MIN_MACOS" ] || [ "$BUILT_SDK" != "$SDK" ]; then
+  echo "Moments is built for macOS $MINOS with SDK $BUILT_SDK, not macOS $MIN_MACOS with SDK $SDK." >&2
+  exit 1
+fi
+echo "    $(lipo -archs "$APP/Contents/MacOS/Moments"), macOS $MINOS and later, SDK $BUILT_SDK"
 
 echo "==> Signing (ad hoc)"
 codesign --force --sign - "$APP"

@@ -49,10 +49,7 @@ final class PanelController {
         let hosting = NSHostingView(rootView: content)
         // The panel's frame is set here, following the content; SwiftUI mustn't resize it.
         hosting.sizingOptions = []
-        let glass = NSGlassEffectView()
-        glass.cornerRadius = 18
-        glass.contentView = hosting
-        panel.contentView = glass
+        panel.contentView = Self.background(around: hosting)
         // Lay the content out now, so the first peek already knows how tall it is.
         hosting.frame = NSRect(x: 0, y: 0, width: Self.width, height: 600)
         hosting.layoutSubtreeIfNeeded()
@@ -64,6 +61,43 @@ final class PanelController {
         state.lowerPanel = { [weak self] lowered in
             self?.panel.level = lowered ? .floating : FloatingPanel.standardLevel
         }
+    }
+
+    /// Liquid Glass where there is Liquid Glass; before it, the material menus and popovers use, in
+    /// the same rounded shape.
+    private static func background(around content: NSView) -> NSView {
+        if #available(macOS 26, *) {
+            let glass = NSGlassEffectView()
+            glass.cornerRadius = 18
+            glass.contentView = content
+            return glass
+        }
+        let material = NSVisualEffectView()
+        material.material = .popover
+        material.state = .active
+        material.maskImage = roundedMask(radius: 12)
+        content.translatesAutoresizingMaskIntoConstraints = false
+        material.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: material.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: material.trailingAnchor),
+            content.topAnchor.constraint(equalTo: material.topAnchor),
+            content.bottomAnchor.constraint(equalTo: material.bottomAnchor),
+        ])
+        return material
+    }
+
+    /// A stretchable rounded rectangle. As a material's mask it also shapes the window's shadow.
+    private static func roundedMask(radius: CGFloat) -> NSImage {
+        let side = radius * 2 + 1
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+        image.resizingMode = .stretch
+        return image
     }
 
     // MARK: - Pointer and clicks

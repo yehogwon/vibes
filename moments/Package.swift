@@ -8,7 +8,7 @@ import PackageDescription
 
 let package = Package(
     name: "Moments",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v14)],
     products: [
         .executable(name: "Moments", targets: ["Moments"]),
         .library(name: "MomentsCore", targets: ["MomentsCore"]),

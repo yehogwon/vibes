@@ -25,7 +25,7 @@ cask "moments" do
   homepage "https://github.com/yehogwon/vibes"
 
   # Matches LSMinimumSystemVersion in moments/Resources/Info.plist.
-  depends_on macos: :tahoe
+  depends_on macos: :sonoma
 
   app "Moments.app"
 
