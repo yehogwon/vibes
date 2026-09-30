@@ -191,7 +191,7 @@ final class PanelController {
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let item = itemRect ?? NSRect(x: visible.maxX - 100, y: visible.maxY, width: 0, height: 0)
         let size = Self.size
-        let top = min(item.minY, visible.maxY) - 6
+        let top = min(item.minY, visible.maxY) - MenuBarPanel.gap
         let height = max(min(size.height, top - visible.minY - 12), 200)
         let x = min(max(item.midX - size.width / 2, visible.minX + 8), visible.maxX - size.width - 8)
         return NSRect(x: x.rounded(), y: (top - height).rounded(), width: size.width, height: height.rounded())
@@ -218,9 +218,7 @@ final class PanelController {
 
     private func checkPointer() {
         guard mode == .peeking else { return stopLeaveTimer() }
-        // The icon, the panel, and the gap between them, with a little slack.
-        let zone = (itemRect ?? .null).union(panel.frame).insetBy(dx: -8, dy: -8)
-        if zone.contains(NSEvent.mouseLocation) {
+        if MenuBarPanel.holdsPeek(NSEvent.mouseLocation, item: itemRect, frame: panel.frame) {
             pointerLeftAt = nil
         } else if let leftAt = pointerLeftAt {
             if Date.now.timeIntervalSince(leftAt) >= leaveGrace {

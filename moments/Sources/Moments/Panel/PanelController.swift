@@ -216,7 +216,7 @@ final class PanelController {
         let screen = item?.window?.screen ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let itemRect = item.flatMap(Self.screenRect) ?? NSRect(x: visible.maxX - 100, y: visible.maxY, width: 0, height: 0)
-        let top = min(itemRect.minY, visible.maxY) - 6
+        let top = min(itemRect.minY, visible.maxY) - MenuBarPanel.gap
         let height = max(min(contentHeight, top - visible.minY - 12), 60)
         let x = min(max(itemRect.midX - Self.width / 2, visible.minX + 8), visible.maxX - Self.width - 8)
         return NSRect(x: x.rounded(), y: (top - height).rounded(), width: Self.width, height: height.rounded())
@@ -253,10 +253,10 @@ final class PanelController {
 
     private func checkPointer() {
         guard mode == .peeking else { return stopLeaveTimer() }
-        // The item, the panel, and the gap between them, with a little slack.
-        let itemRect = placement.flatMap(Self.screenRect) ?? .null
-        let zone = itemRect.union(targetFrame()).insetBy(dx: -8, dy: -8)
-        if zone.contains(NSEvent.mouseLocation) {
+        // The panel's frame is still moving while it glides to another item, so this goes by
+        // where it's headed.
+        let item = placement.flatMap(Self.screenRect)
+        if MenuBarPanel.holdsPeek(NSEvent.mouseLocation, item: item, frame: targetFrame()) {
             pointerLeftAt = nil
         } else if let leftAt = pointerLeftAt {
             if Date.now.timeIntervalSince(leftAt) >= leaveGrace {

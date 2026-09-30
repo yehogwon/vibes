@@ -60,6 +60,26 @@ final class MenuBarPanel: NSPanel {
         super.sendEvent(event)
     }
 
+    // MARK: - Placement
+
+    /// The space between the menu bar and the panel's top edge.
+    static let gap: CGFloat = 6
+
+    /// Whether `point` (on screen) is where a peeking panel stays open: on the item it hangs from,
+    /// on the panel at `frame` or just past its sides and bottom, or in the gap between the panel
+    /// and the menu bar. The rest of the menu bar doesn't count, so moving along it away from the
+    /// item closes the panel.
+    static func holdsPeek(_ point: NSPoint, item: NSRect?, frame: NSRect) -> Bool {
+        let slack: CGFloat = 8
+        let panel = NSRect(
+            x: frame.minX - slack, y: frame.minY - slack, width: frame.width + 2 * slack,
+            height: frame.height + slack + gap)
+        guard let item else { return panel.contains(point) }
+        // Straight down from the item, in case the screen's edge pushed the panel aside.
+        let below = NSRect(x: item.minX, y: frame.maxY, width: item.width, height: max(item.minY - frame.maxY, 0))
+        return item.insetBy(dx: -1, dy: -1).contains(point) || panel.contains(point) || below.contains(point)
+    }
+
     // MARK: - Zooming
 
     /// Orders the panel in at `frame`, zooming in from the point on its top edge under `itemMidX`
