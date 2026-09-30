@@ -8,6 +8,7 @@ struct MomentEditor: View {
     @Environment(AppState.self) private var app
     @State private var draft: Moment
     @FocusState private var isNameFocused: Bool
+    @State private var emojiTarget = EmojiTarget()
     /// The moment as editing began. Only what changed since is saved, so an edit arriving from
     /// another Mac meanwhile survives.
     let original: Moment
@@ -147,31 +148,34 @@ struct MomentEditor: View {
 
     private var iconPicker: some View {
         HStack(spacing: 8) {
-            AvatarView(moment: draft, fraction: draft.kind == .progress ? 0.7 : nil, size: 26)
-            TextField("🙂", text: emoji)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 44)
-                .multilineTextAlignment(.center)
-                .help("Type or pick an emoji (⌃⌘Space)")
+            Button(action: emojiTarget.pick) {
+                Text(draft.emoji.isEmpty ? "Emoji…" : draft.emoji)
+            }
+            .background {
+                EmojiReceiver(target: emojiTarget) { draft.emoji = $0 }
+                    .frame(width: 1, height: 1)
+                    .accessibilityHidden(true)
+            }
+            .accessibilityLabel("Emoji")
+            .accessibilityValue(draft.emoji)
+            .help("Pick from Emoji & Symbols")
+            if !draft.emoji.isEmpty {
+                removeButton("Remove Emoji", help: "Use the symbol instead") { draft.emoji = "" }
+            }
             Button("Photo…", action: choosePhoto)
             if draft.imageData != nil {
-                Button { draft.imageData = nil } label: {
-                    IconLabel(title: "Remove Photo", systemImage: "xmark.circle.fill", side: 20)
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .help("Use the emoji or symbol instead")
+                removeButton("Remove Photo", help: "Use the emoji or symbol instead") { draft.imageData = nil }
             }
         }
     }
 
-    /// Keeps only the last character typed, so the field holds one emoji.
-    private var emoji: Binding<String> {
-        Binding {
-            draft.emoji
-        } set: { text in
-            draft.emoji = text.last.map(String.init) ?? ""
+    private func removeButton(_ title: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            IconLabel(title: title, systemImage: "xmark.circle.fill")
         }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .help(help)
     }
 
     private func choosePhoto() {
@@ -291,5 +295,69 @@ struct MomentEditor: View {
         case 14: "2 Weeks Before"
         default: "\(days) Days Before"
         }
+    }
+}
+
+// MARK: - Emoji
+
+/// Opens the Emoji & Symbols viewer for the editor's emoji button. The viewer types into the key
+/// window's first responder, so the button hands focus to an `EmojiReceiver` first.
+@MainActor
+final class EmojiTarget {
+    fileprivate weak var view: EmojiTextView?
+
+    func pick() {
+        guard let view, let window = view.window else { return }
+        window.makeFirstResponder(view)
+        NSApp.orderFrontCharacterPalette(nil)
+    }
+}
+
+/// An invisible text view that passes on the last character it's given, or an empty string for
+/// Delete, and keeps none of it.
+private struct EmojiReceiver: NSViewRepresentable {
+    let target: EmojiTarget
+    let onPick: (String) -> Void
+
+    func makeNSView(context: Context) -> EmojiTextView {
+        let view = EmojiTextView(frame: NSRect(x: 0, y: 0, width: 1, height: 1))
+        view.isRichText = false
+        view.isFieldEditor = true
+        view.drawsBackground = false
+        view.insertionPointColor = .clear
+        view.focusRingType = .none
+        view.setAccessibilityElement(false)
+        return view
+    }
+
+    func updateNSView(_ view: EmojiTextView, context: Context) {
+        view.onPick = onPick
+        target.view = view
+    }
+}
+
+fileprivate final class EmojiTextView: NSTextView {
+    var onPick: (String) -> Void = { _ in }
+
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        let text = (string as? NSAttributedString)?.string ?? (string as? String) ?? ""
+        if let last = text.last {
+            onPick(String(last))
+        }
+    }
+
+    override func deleteBackward(_ sender: Any?) {
+        onPick("")
+    }
+
+    /// Only the emoji button focuses it, so Tab passes it by, and leaves it for the next control.
+    override var canBecomeKeyView: Bool { false }
+
+    override func insertTab(_ sender: Any?) {
+        window?.selectNextKeyView(nil)
+    }
+
+    override func insertBacktab(_ sender: Any?) {
+        window?.selectPreviousKeyView(nil)
     }
 }
