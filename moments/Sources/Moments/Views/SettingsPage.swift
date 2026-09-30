@@ -12,9 +12,12 @@ struct SettingsPage: View {
         @Bindable var app = app
         VStack(alignment: .leading, spacing: 0) {
             PageHeader(title: "Settings") {
-                Button("Back", systemImage: "chevron.left") { app.route = .list }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
+                Button { app.route = .list } label: {
+                    IconLabel(title: "Back", systemImage: "chevron.left")
+                }
+                .buttonStyle(.borderless)
+                .padding(.leading, -4)
+                .help("Back to the list (Esc)")
             } trailing: {
                 EmptyView()
             }
@@ -33,14 +36,19 @@ struct SettingsPage: View {
                     .padding(.vertical, 2)
                 VStack(alignment: .leading, spacing: 4) {
                     SyncStatusLabel(status: app.store.status)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.callout.weight(.medium))
                     Text(app.syncDescription)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     if case .failed(let message) = app.store.status {
-                        Text(message)
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
+                        Label {
+                            Text(message)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                        }
                     }
                 }
                 HStack {
@@ -54,7 +62,7 @@ struct SettingsPage: View {
                 Button("Quit Moments") { NSApp.terminate(nil) }
             }
             .toggleStyle(.checkbox)
-            .font(.system(size: 12))
+            .font(.callout)
             .controlSize(.small)
             .padding(.horizontal, 16)
             .padding(.bottom, 14)

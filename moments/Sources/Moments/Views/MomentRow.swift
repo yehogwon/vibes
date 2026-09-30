@@ -34,21 +34,21 @@ struct MomentRow: View {
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(moment.displayName)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.body.weight(.medium))
                     .lineLimit(1)
                 subtitleText
-                    .font(.system(size: 11))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
             VStack(alignment: .trailing, spacing: 0) {
                 Text(summary.headline)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(.system(.title2, design: .rounded, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(moment.tint)
+                    .foregroundStyle(moment.ink)
                 Text(summary.caption)
-                    .font(.system(size: 10.5))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -85,18 +85,18 @@ struct MomentRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
                 Text(moment.displayName)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.body.weight(.medium))
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Text(progress.percent)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(.body, design: .rounded, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(moment.tint)
+                    .foregroundStyle(moment.ink)
             }
-            ProgressBar(fraction: progress.fraction, tint: moment.tint)
+            ProgressBar(fraction: progress.fraction, track: moment.tint.opacity(0.16), bar: moment.ink)
                 .frame(height: 5)
             Text(progress.detail)
-                .font(.system(size: 10.5))
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
     }
@@ -104,14 +104,15 @@ struct MomentRow: View {
 
 struct ProgressBar: View {
     var fraction: Double
-    var tint: Color
+    var track: Color
+    var bar: Color
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
-                Capsule().fill(tint.opacity(0.16))
+                Capsule().fill(track)
                 Capsule()
-                    .fill(tint)
+                    .fill(bar)
                     .frame(width: max(geometry.size.height, geometry.size.width * fraction))
                     .opacity(fraction > 0 ? 1 : 0)
             }

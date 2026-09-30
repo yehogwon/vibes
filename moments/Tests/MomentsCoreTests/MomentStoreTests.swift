@@ -1,6 +1,6 @@
 import Foundation
-import Synchronization
 import Testing
+import os
 
 @testable import MomentsCore
 
@@ -23,8 +23,10 @@ final class TemporaryDirectory {
 }
 
 /// A clock the test moves by hand.
+///
+/// A lock rather than `Mutex`, which needs macOS 15.
 final class TestClock: Sendable {
-    private let date = Mutex(at(0))
+    private let date = OSAllocatedUnfairLock(initialState: at(0))
 
     var now: Date { date.withLock { $0 } }
 

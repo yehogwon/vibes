@@ -162,7 +162,7 @@ private struct ItemContent: Equatable {
             return Self.circular(photo, side: 16)
         }
         if let fraction {
-            return Self.ring(fraction, color: Palette.nsColor(hex: colorHex), side: 15)
+            return Self.ring(fraction, color: Palette.inkNSColor(hex: colorHex), side: 15)
         }
         return nil
     }

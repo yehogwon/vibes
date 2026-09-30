@@ -79,8 +79,13 @@ final class AppState {
         switch storage {
         case .checking: "Checking iCloud…"
         case .iCloud: "iCloud Drive › Jots"
-        case .local: "On this Mac (sign in to iCloud and turn on iCloud Drive to sync)"
+        case .local: "On this Mac"
         }
+    }
+
+    /// What to do about where the scratchpad is, if anything.
+    var storageHint: String? {
+        storage == .local ? "Sign in to iCloud and turn on iCloud Drive to sync between your Macs." : nil
     }
 
     // MARK: - Storage

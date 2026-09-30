@@ -14,6 +14,10 @@ final class MarkdownLayoutFragment: NSTextLayoutFragment {
         textLayoutManager?.textContainer?.size.width ?? layoutFragmentFrame.width
     }
 
+    /// The text container's leading edge, relative to this fragment's origin. An indented
+    /// paragraph's fragment starts at its indent, not at the container's edge.
+    private var containerMinX: CGFloat { -layoutFragmentFrame.minX }
+
     private var paragraphAttributes: [NSAttributedString.Key: Any] {
         guard let paragraph = textElement as? NSTextParagraph, paragraph.attributedString.length > 0 else {
             return [:]
@@ -23,7 +27,8 @@ final class MarkdownLayoutFragment: NSTextLayoutFragment {
 
     override var renderingSurfaceBounds: CGRect {
         let fullWidth = CGRect(
-            x: -Self.bleed, y: 0, width: containerWidth + Self.bleed * 2, height: layoutFragmentFrame.height)
+            x: containerMinX - Self.bleed, y: 0, width: containerWidth + Self.bleed * 2,
+            height: layoutFragmentFrame.height)
         return super.renderingSurfaceBounds.union(fullWidth)
     }
 
@@ -103,7 +108,7 @@ final class MarkdownLayoutFragment: NSTextLayoutFragment {
         _ position: MarkdownSpan.CodeBlockPosition, at point: CGPoint, in context: CGContext
     ) {
         let rect = CGRect(
-            x: point.x - Self.bleed, y: point.y, width: containerWidth + Self.bleed * 2,
+            x: point.x + containerMinX - Self.bleed, y: point.y, width: containerWidth + Self.bleed * 2,
             height: layoutFragmentFrame.height)
         let roundTop = position == .first || position == .single
         let roundBottom = position == .last || position == .single
@@ -126,8 +131,8 @@ final class MarkdownLayoutFragment: NSTextLayoutFragment {
         let y = (point.y + line.typographicBounds.midY).rounded() + 0.5
         context.setStrokeColor(NSColor.separatorColor.cgColor)
         context.setLineWidth(1)
-        context.move(to: CGPoint(x: point.x, y: y))
-        context.addLine(to: CGPoint(x: point.x + containerWidth, y: y))
+        context.move(to: CGPoint(x: point.x + containerMinX, y: y))
+        context.addLine(to: CGPoint(x: point.x + containerMinX + containerWidth, y: y))
         context.strokePath()
     }
 

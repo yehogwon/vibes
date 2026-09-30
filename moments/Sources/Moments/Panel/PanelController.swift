@@ -49,10 +49,7 @@ final class PanelController {
         let hosting = NSHostingView(rootView: content)
         // The panel's frame is set here, following the content; SwiftUI mustn't resize it.
         hosting.sizingOptions = []
-        let glass = NSGlassEffectView()
-        glass.cornerRadius = 18
-        glass.contentView = hosting
-        panel.contentView = glass
+        panel.contentView = Self.background(around: hosting)
         // Lay the content out now, so the first peek already knows how tall it is.
         hosting.frame = NSRect(x: 0, y: 0, width: Self.width, height: 600)
         hosting.layoutSubtreeIfNeeded()
@@ -64,6 +61,43 @@ final class PanelController {
         state.lowerPanel = { [weak self] lowered in
             self?.panel.level = lowered ? .floating : FloatingPanel.standardLevel
         }
+    }
+
+    /// Liquid Glass where there is Liquid Glass; before it, the material menus and popovers use, in
+    /// the same rounded shape.
+    private static func background(around content: NSView) -> NSView {
+        if #available(macOS 26, *) {
+            let glass = NSGlassEffectView()
+            glass.cornerRadius = 18
+            glass.contentView = content
+            return glass
+        }
+        let material = NSVisualEffectView()
+        material.material = .popover
+        material.state = .active
+        material.maskImage = roundedMask(radius: 12)
+        content.translatesAutoresizingMaskIntoConstraints = false
+        material.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: material.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: material.trailingAnchor),
+            content.topAnchor.constraint(equalTo: material.topAnchor),
+            content.bottomAnchor.constraint(equalTo: material.bottomAnchor),
+        ])
+        return material
+    }
+
+    /// A stretchable rounded rectangle. As a material's mask it also shapes the window's shadow.
+    private static func roundedMask(radius: CGFloat) -> NSImage {
+        let side = radius * 2 + 1
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+        image.resizingMode = .stretch
+        return image
     }
 
     // MARK: - Pointer and clicks
@@ -136,7 +170,7 @@ final class PanelController {
         let frame = targetFrame()
         // Start a little higher and transparent, then settle into place.
         panel.alphaValue = 0
-        panel.setFrame(frame.offsetBy(dx: 0, dy: 8), display: false)
+        panel.setFrame(frame.offsetBy(dx: 0, dy: Self.reducesMotion ? 0 : 8), display: false)
         NSApp.unhideWithoutActivation()
         if pinned {
             mode = .pinned
@@ -175,7 +209,7 @@ final class PanelController {
         stopPinnedMonitors()
         generation += 1
         let current = generation
-        let frame = panel.frame.offsetBy(dx: 0, dy: 5)
+        let frame = panel.frame.offsetBy(dx: 0, dy: Self.reducesMotion ? 0 : 5)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.1
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -207,7 +241,7 @@ final class PanelController {
     }
 
     private func move(to frame: NSRect, animated: Bool) {
-        guard animated else {
+        guard animated, !Self.reducesMotion else {
             panel.setFrame(frame, display: true)
             return
         }
@@ -216,6 +250,12 @@ final class PanelController {
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             panel.animator().setFrame(frame, display: true)
         }
+    }
+
+    /// With Reduce Motion on, the panel only fades: it doesn't slide in or out, or glide between
+    /// items and heights.
+    private static var reducesMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
 
     /// The item the panel hangs from: its anchor, or the app's own item if that's gone from the

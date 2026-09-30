@@ -20,16 +20,21 @@ struct SettingsView: View {
                     HotKeyRecorder(shortcut: $app.hotKey, onRecordingChange: app.pauseHotKey)
                 }
                 if let error = app.hotKeyError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                    Label {
+                        Text(error)
+                            .foregroundStyle(.secondary)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                    .font(.subheadline)
                 }
                 Toggle("Open Jots at login", isOn: $opensAtLogin)
                     .onChange(of: opensAtLogin) { _, enabled in updateLoginItem(enabled) }
                 if let loginItemMessage {
                     HStack {
                         Text(loginItemMessage)
-                            .font(.caption)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                         Button("Login Items…") { SMAppService.openSystemSettingsLoginItems() }
                             .controlSize(.small)
@@ -51,6 +56,11 @@ struct SettingsView: View {
             }
             Section("Storage") {
                 LabeledContent("Scratchpad", value: app.storageDescription)
+                if let hint = app.storageHint {
+                    Text(hint)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)

@@ -20,9 +20,9 @@ enum MainMenu {
             submenu(
                 "File",
                 [
-                    item("New D-Day", #selector(AppDelegate.newDate(_:)), "n"),
-                    item("New Birthday", #selector(AppDelegate.newBirthday(_:)), "n", [.command, .option]),
-                    item("New Progress Bar", #selector(AppDelegate.newProgress(_:)), "n", [.command, .shift]),
+                    item("New D-Day…", #selector(AppDelegate.newDate(_:)), "n"),
+                    item("New Birthday…", #selector(AppDelegate.newBirthday(_:)), "n", [.command, .option]),
+                    item("New Progress Bar…", #selector(AppDelegate.newProgress(_:)), "n", [.command, .shift]),
                     .separator(),
                     item("Sync Now", #selector(AppDelegate.syncNow(_:)), "r"),
                     item("Close", #selector(AppDelegate.closePanel(_:)), "w"),
