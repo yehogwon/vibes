@@ -44,7 +44,7 @@ struct ScratchpadView: View {
             if let copy = app.file.conflictCopies.last {
                 let count = app.file.conflictCopies.count
                 Banner(
-                    systemImage: "exclamationmark.triangle",
+                    systemImage: "exclamationmark.triangle.fill", symbolColor: .orange,
                     message: count == 1
                         ? "Another Mac edited at the same time, so its version was kept as “\(copy.lastPathComponent)”."
                         : "\(count) versions edited at the same time were kept as separate files."
@@ -63,19 +63,25 @@ struct ScratchpadView: View {
             )
             .monospacedDigit()
             if let error = app.file.lastError {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .lineLimit(1)
-                    .help(error)
+                // Small orange text isn't legible enough, so only the symbol carries the color.
+                Label {
+                    Text(error)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+                .lineLimit(1)
+                .help(error)
             }
             Spacer()
             if showsCopied {
                 Label("Copied", systemImage: "checkmark")
                     .transition(.opacity)
             }
-            Button("Copy All", systemImage: "doc.on.doc") { app.copy() }
-                .labelStyle(.iconOnly)
-                .help("Copy everything (⇧⌘C)")
+            Button { app.copy() } label: {
+                IconLabel(title: "Copy All", systemImage: "doc.on.doc")
+            }
+            .help("Copy everything (⇧⌘C)")
             Menu {
                 Button("Export as Markdown…") { app.export() }
                 Button("Show in Finder") { app.showInFinder() }
@@ -86,18 +92,21 @@ struct ScratchpadView: View {
                 }
                 Button("Quit Jots") { NSApp.terminate(nil) }
             } label: {
-                Image(systemName: "ellipsis.circle")
+                IconLabel(title: "More", systemImage: "ellipsis.circle")
             }
             .menuStyle(.button)
+            // Plain, since a borderless menu keeps its symbol's size as its hit area.
+            .buttonStyle(.plain)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("More")
+            .help("Export, show in Finder, settings, and quit")
         }
         .buttonStyle(.borderless)
-        .font(.caption)
+        .font(.subheadline)
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
+        .padding(.vertical, 4)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
     }
@@ -125,16 +134,18 @@ struct ScratchpadView: View {
     }
 }
 
-/// A one-line notice above the editor.
+/// A one- or two-line notice above the editor.
 private struct Banner<Actions: View>: View {
     var systemImage: String
+    /// Warnings color their symbol; the text stays legible in the label colors.
+    var symbolColor: Color = .secondary
     var message: String
     @ViewBuilder var actions: Actions
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(symbolColor)
             Text(message)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -142,7 +153,7 @@ private struct Banner<Actions: View>: View {
         }
         .font(.callout)
         .controlSize(.small)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
@@ -152,5 +163,19 @@ private struct Banner<Actions: View>: View {
 extension Banner where Actions == EmptyView {
     init(systemImage: String, message: String) {
         self.init(systemImage: systemImage, message: message) { EmptyView() }
+    }
+}
+
+/// An icon-only button's label, with a hit area bigger than its symbol.
+struct IconLabel: View {
+    var title: String
+    var systemImage: String
+    var side: CGFloat = 24
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .labelStyle(.iconOnly)
+            .frame(width: side, height: side)
+            .contentShape(Rectangle())
     }
 }

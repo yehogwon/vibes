@@ -74,6 +74,13 @@ struct MarkdownStyler {
         for span in spans where span.kind == .horizontalRule && !isRevealed(span.range, in: revealed) {
             storage.addAttribute(.foregroundColor, value: NSColor.clear, range: span.range)
         }
+        // A code block's fences disappear the same way, and their lines stay as the block's padding.
+        // (A code line's only markers are its fences.)
+        if info.isCode {
+            for span in spans where span.kind == .marker && !isRevealed(span.range, in: revealed) {
+                storage.addAttribute(.foregroundColor, value: NSColor.clear, range: span.range)
+            }
+        }
         guard info.indent != nil || info.headingLevel != nil || info.isCode else { return }
         let indent = info.indent.map { cache.width(of: storage.attributedSubstring(from: $0)) } ?? 0
         let style = cache.paragraphStyle(
