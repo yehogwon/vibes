@@ -27,11 +27,15 @@ HIG decides. Each rule names the page it comes from, or says it's our own call.
 
 ## Surfaces
 
-- **Menu bar item.** An SF Symbol template image, no color. A click opens the main surface; a
-  right-click or Control-click opens a menu with every command, ending in Settings… and Quit.
+- **Menu bar item.** An SF Symbol template image, no color. Resting the pointer on it opens the
+  main surface (a setting can turn that off), and a click opens it too; a right-click or
+  Control-click opens a menu with every command, ending in Settings… and Quit.
   (`the-menu-bar.md › Menu bar extras`)
-- **Main surface.** A popover, or a borderless panel under the menu bar item, only as big as its
-  content and no wider than 480 pt. (`popovers.md`: "Avoid making a popover too big.")
+- **Main surface.** A borderless panel under the menu bar item, only as big as its content and no
+  wider than 480 pt. (`popovers.md`: "Avoid making a popover too big.") Opened by the pointer, it
+  *peeks*: it doesn't take focus, and closes once the pointer leaves both it and the item. A click
+  in it *pins* it: it takes focus and stays until Esc or a click elsewhere. A click on the item
+  pins it too where the surface is for typing, as in Jots. Our call.
 - **One layer of glass.** The surface itself is Liquid Glass on macOS 26 and the `.popover`
   material before it: corner radius 18 pt on glass, 12 pt on the material. Nothing inside it is
   glass: rows, cards, and fields never are. (`materials.md › Liquid Glass`: "Don't use Liquid
@@ -136,10 +140,14 @@ scale across apps. (`typography.md › macOS built-in text styles`)
 
 ## Motion
 
-- **0.1 to 0.25 s, easing out.** Surfaces fade in, sliding at most 8 pt; they fade out faster than
-  they arrive. Frequent interactions get no motion beyond the system's own. (`motion.md › Best
-  practices`)
-- **Reduce Motion means fades only:** no sliding, no animated moves or resizes.
+- **0.1 to 0.25 s, easing out.** Frequent interactions get no motion beyond the system's own.
+  (`motion.md › Best practices`)
+- **The main surface zooms from its menu bar item,** the way a popover opens from its arrow: in
+  from 60% while fading in (0.2 s), and back out to the item faster than it arrived (0.15 s).
+  Every app uses the same `MenuBarPanel`, so they all open and close alike. (`motion.md ›
+  Providing feedback`: "if someone reveals a view by sliding it down from the top, they don't
+  expect to dismiss the view by sliding it to the side.")
+- **Reduce Motion means fades only:** no zooming or sliding, no animated moves or resizes.
 - **Motion never carries meaning on its own,** and nothing waits for an animation to finish.
 
 ## Writing
