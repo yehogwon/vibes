@@ -6,6 +6,7 @@ name: CI
 # touches and however many there are.
 #
 # An app is a folder with a build.sh. Each needs a job below, and a place in the CI job's needs.
+# One with a cask.sh also needs to be a choice of release.yml's app input.
 on:
   pull_request:
     branches: [main]
@@ -45,6 +46,10 @@ jobs:
             app="${build%/build.sh}"
             if ! grep -q "^      app: $app$" .github/workflows/ci.yml; then
               echo "::error::$app has no job in ci.yml."
+              exit 1
+            fi
+            if [ -f "$app/cask.sh" ] && ! grep -q "^          - $app$" .github/workflows/release.yml; then
+              echo "::error::$app has a cask.sh, but release.yml can't release it."
               exit 1
             fi
             if [ "$EVENT" != pull_request ] || grep -q -e "^$app/" -e '^\.github/' <<<"$changed"; then
