@@ -117,6 +117,17 @@ final class AppState {
         store.reorder(ids)
     }
 
+    /// Moves the moment `id` up (negative) or down the list by `steps` places.
+    func move(_ id: UUID, by steps: Int) {
+        var ids = store.moments.map(\.id)
+        guard let from = ids.firstIndex(of: id) else { return }
+        let to = min(max(from + steps, 0), ids.count - 1)
+        guard to != from else { return }
+        ids.remove(at: from)
+        ids.insert(id, at: to)
+        store.reorder(ids)
+    }
+
     /// Esc: leaves the editor or settings first, then closes the panel.
     func goBack() {
         if route == .list {
