@@ -1,9 +1,9 @@
 name: App
 
 # Checks one app: builds it, runs its tests, opens it on each macOS it supports that GitHub has a
-# runner for, and checks its cask if it has one. ci.yml runs this for each app a PR changes, and
-# release.yml before publishing one, which then releases the zip built here as the version it asked
-# for.
+# runner for, and checks its cask if it has one. ci.yml runs this for each app a PR changes, asking
+# only for the part the change touches, and release.yml runs all of it before publishing one, which
+# then releases the zip built here as the version it asked for.
 on:
   workflow_call:
     inputs:
@@ -19,6 +19,14 @@ on:
         description: The version to build the app as. Empty keeps 0.0.0, the one in its Info.plist.
         type: string
         default: ''
+      build:
+        description: Whether to build, test and open the app.
+        type: boolean
+        default: true
+      cask:
+        description: Whether to check its cask, if it has one.
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -35,6 +43,7 @@ env:
 jobs:
   build-test:
     name: Build & test
+    if: inputs.build
     runs-on: macos-26
     timeout-minutes: 30
     outputs:
@@ -139,6 +148,9 @@ jobs:
   # Outside a release, the version is the 0.0.0 in the Info.plist.
   cask:
     name: Cask
+    # hashFiles only works in steps, so an app without a cask.sh still gets a runner here, unless
+    # the caller skips this.
+    if: inputs.cask
     runs-on: macos-26
     timeout-minutes: 15
     steps:
