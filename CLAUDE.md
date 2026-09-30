@@ -1,3 +1,4 @@
 - Never edit README unless the user explicitly asks you to do so.
 - Apps with a `cask.sh` (Jots, Moments) ship through Homebrew: merging a bump of `CFBundleShortVersionString` in `<app>/Resources/Info.plist` into main releases it, and the cask comes from `<app>/cask.sh` (never edit casks in `yehogwon/homebrew-vibes`), whose quarantine-clearing `postflight` must not become `postflight_steps`.
 - main requires one check, "CI", from `.github/workflows/ci.yml`. A new app needs its own job there, listed in the CI job's `needs`.
+- UI work follows `DESIGN.md`, and is reviewed with the apple-design skill (`.claude/skills/apple-design`) before it ships.
