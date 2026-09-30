@@ -2,7 +2,8 @@ name: App
 
 # Checks one app: builds it, runs its tests, opens it on each macOS it supports that GitHub has a
 # runner for, and checks its cask if it has one. ci.yml runs this for each app a PR changes, and
-# release.yml before publishing one, which then releases the zip built here.
+# release.yml before publishing one, which then releases the zip built here as the version it asked
+# for.
 on:
   workflow_call:
     inputs:
@@ -12,6 +13,10 @@ on:
         type: string
       open-args:
         description: Arguments to open the app with. Relative paths land in an empty folder.
+        type: string
+        default: ''
+      version:
+        description: The version to build the app as. Empty keeps 0.0.0, the one in its Info.plist.
         type: string
         default: ''
 
@@ -24,6 +29,7 @@ env:
   DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
   APP: ${{ inputs.app }}
   OPEN_ARGS: ${{ inputs.open-args }}
+  VERSION: ${{ inputs.version }}
   HOMEBREW_NO_AUTO_UPDATE: 1
 
 jobs:
@@ -59,6 +65,11 @@ jobs:
           echo "NAME=$name" >> "$GITHUB_ENV"
           swift --version
 
+      # build.sh copies the Info.plist into the app before signing it.
+      - name: Set the version
+        if: inputs.version != ''
+        run: plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Resources/Info.plist"
+
       - name: Build
         run: |
           "$APP/build.sh"
@@ -74,7 +85,13 @@ jobs:
 
       # Zipped with ditto first: upload-artifact drops the executable bit.
       - name: Package
-        run: ditto -c -k --keepParent "$APP/build/$NAME.app" "$RUNNER_TEMP/$NAME.zip"
+        run: |
+          built="$(plutil -extract CFBundleShortVersionString raw "$APP/build/$NAME.app/Contents/Info.plist")"
+          if [ -n "$VERSION" ] && [ "$built" != "$VERSION" ]; then
+            echo "::error::$NAME was built as version $built, not $VERSION."
+            exit 1
+          fi
+          ditto -c -k --keepParent "$APP/build/$NAME.app" "$RUNNER_TEMP/$NAME.zip"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -119,6 +136,7 @@ jobs:
 
   # Beside the build rather than after it, so it doesn't make the run any longer. The audit doesn't
   # download the app, so any checksum passes; release.yml audits the cask again with the real one.
+  # Outside a release, the version is the 0.0.0 in the Info.plist.
   cask:
     name: Cask
     runs-on: macos-26
@@ -131,7 +149,7 @@ jobs:
       - name: Audit the cask
         if: hashFiles(format('{0}/cask.sh', inputs.app)) != ''
         run: |
-          version="$(plutil -extract CFBundleShortVersionString raw "$APP/Resources/Info.plist")"
+          version="${VERSION:-$(plutil -extract CFBundleShortVersionString raw "$APP/Resources/Info.plist")}"
           mkdir -p "$RUNNER_TEMP/tap/Casks"
           "$APP/cask.sh" "$version" "$(printf '%064d' 0)" > "$RUNNER_TEMP/tap/Casks/$APP.rb"
           .github/scripts/audit-casks.sh "$RUNNER_TEMP/tap" "$APP"

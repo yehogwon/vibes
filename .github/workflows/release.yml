@@ -1,19 +1,46 @@
 name: Release
 
-# Publishes the apps from main through Homebrew. An app ships once it has a cask.sh, and bumping
-# CFBundleShortVersionString in its Resources/Info.plist is all a release takes: if there's no
-# <app>-v<version> release for that version yet, app.yml checks the app as CI does, and the zip it
-# built is attached to a new release. Then each app's cask (<app>/cask.sh) for its current release
-# is written into yehogwon/homebrew-vibes, which `brew install --cask yehogwon/vibes/<app>` reads.
-# A push that changes no version and no cask finds everything up to date and stops there.
+# Publishes one app from main through Homebrew, when it's run from the Actions tab or with
+# `gh workflow run release.yml -f app=jots -f bump=minor`. An app ships once it has a cask.sh. Its
+# Resources/Info.plist keeps 0.0.0 as its version: the version comes from the app's last release,
+# the highest <app>-v<version> tag, raised by the bump picked, or is the exact one given instead,
+# which has to be higher. app.yml checks the app as CI does and builds it as that version, and the
+# zip it built is attached to a new release, which tags the commit. Then the app's cask
+# (<app>/cask.sh) for that release is written into yehogwon/homebrew-vibes, which
+# `brew install --cask yehogwon/vibes/<app>` reads.
+#
+# If a run fails after the release is made, re-run its failed jobs: running it again would release
+# the version after that one instead.
 #
 # Pushing to the tap takes a deploy key with write access to yehogwon/homebrew-vibes, whose private
 # half is the HOMEBREW_TAP_DEPLOY_KEY secret of this repository's release environment, which only
 # main can use.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      app:
+        description: App
+        required: true
+        type: choice
+        # Each app with a cask.sh, which ci.yml checks.
+        options:
+          - jots
+          - moments
+      bump:
+        description: Bump
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+      version:
+        description: Or this exact version, such as 1.0.0
+        type: string
+        default: ''
+
+run-name: Release ${{ inputs.app }} ${{ inputs.version || inputs.bump }}
 
 # One at a time, and never cancelled halfway through a release.
 concurrency:
@@ -26,84 +53,109 @@ permissions:
 env:
   GH_TOKEN: ${{ github.token }}
   GH_REPO: ${{ github.repository }}
+  APP: ${{ inputs.app }}
 
 jobs:
   plan:
     name: Plan
-    # workflow_dispatch can run from any branch, but only main is released.
+    # A run can start from any branch, but only main is released.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      apps: ${{ steps.plan.outputs.apps }}
-      unreleased: ${{ steps.plan.outputs.unreleased }}
+      name: ${{ steps.plan.outputs.name }}
+      version: ${{ steps.plan.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Find unreleased versions
+      - name: Pick the version
         id: plan
+        env:
+          BUMP: ${{ inputs.bump }}
+          VERSION: ${{ inputs.version }}
         run: |
+          if [ ! -f "$APP/cask.sh" ]; then
+            echo "::error::$APP has no cask.sh, so it doesn't ship through Homebrew."
+            exit 1
+          fi
           # Ubuntu has no plutil.
-          plist() {
-            python3 -c 'import plistlib, sys; print(plistlib.load(open(sys.argv[1], "rb"))[sys.argv[2]])' "$@"
+          name="$(python3 -c 'import plistlib, sys; print(plistlib.load(open(sys.argv[1], "rb"))["CFBundleName"])' \
+            "$APP/Resources/Info.plist")"
+
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          # Fetched on its own line, so a failed request stops here rather than looking like no
+          # releases.
+          refs="$(gh api "repos/$GH_REPO/git/matching-refs/tags/$APP-v" --paginate --jq '.[].ref')"
+          released="$(sed -n "s|^refs/tags/$APP-v||p" <<<"$refs" | grep -E "$semver" | sort -V)"
+          last="$(tail -n 1 <<<"$released")"
+          base="${last:-0.0.0}"
+          higher() {
+            [ "$1" != "$2" ] && [ "$(printf '%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
           }
-          printf '| App | Version | |\n| --- | --- | --- |\n' >> "$GITHUB_STEP_SUMMARY"
-          apps='[]'
-          for cask in */cask.sh; do
-            app="${cask%/cask.sh}"
-            name="$(plist "$app/Resources/Info.plist" CFBundleName)"
-            version="$(plist "$app/Resources/Info.plist" CFBundleShortVersionString)"
-            if gh release view "$app-v$version" >/dev/null 2>&1; then
-              released=true
-              echo "| $name | $version | Already released |" >> "$GITHUB_STEP_SUMMARY"
-            else
-              released=false
-              echo "| $name | $version | **New** |" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -n "$VERSION" ]; then
+            version="$VERSION"
+            if ! grep -Eq "$semver" <<<"$version"; then
+              echo "::error::\"$version\" isn't a version like 1.2.3."
+              exit 1
+            elif grep -qFx "$version" <<<"$released"; then
+              echo "::error::$name $version is already released."
+              exit 1
+            elif ! higher "$version" "$base"; then
+              echo "::error::$name $version isn't higher than ${last:+its last release, }$base."
+              exit 1
             fi
-            apps="$(jq -c --arg app "$app" --arg name "$name" --arg version "$version" \
-              --argjson released "$released" '. + [$ARGS.named]' <<<"$apps")"
-          done
-          jq . <<<"$apps"
+          else
+            IFS=. read -r major minor patch <<<"$base"
+            case "$BUMP" in
+              major) version="$((major + 1)).0.0" ;;
+              minor) version="$major.$((minor + 1)).0" ;;
+              patch) version="$major.$minor.$((patch + 1))" ;;
+              *)
+                echo "::error::\"$BUMP\" isn't a bump."
+                exit 1
+                ;;
+            esac
+          fi
+
           {
-            echo "apps=$apps"
-            echo "unreleased=$(jq -c 'map(select(.released | not))' <<<"$apps")"
+            echo '| App | Last release | Releasing |'
+            echo '| --- | --- | --- |'
+            echo "| $name | ${last:-None} | **$version** |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Releasing $name $version (last release: ${last:-none})."
+          {
+            echo "name=$name"
+            echo "version=$version"
           } >> "$GITHUB_OUTPUT"
 
   check:
-    name: ${{ matrix.name }}
+    name: ${{ needs.plan.outputs.name }}
     needs: plan
-    if: needs.plan.outputs.unreleased != '[]'
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.plan.outputs.unreleased) }}
     uses: ./.github/workflows/app.yml
     with:
-      app: ${{ matrix.app }}
+      app: ${{ inputs.app }}
+      version: ${{ needs.plan.outputs.version }}
 
   publish:
-    name: Publish ${{ matrix.name }} ${{ matrix.version }}
+    name: Publish ${{ needs.plan.outputs.name }} ${{ needs.plan.outputs.version }}
     needs: [plan, check]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.plan.outputs.unreleased) }}
     env:
-      APP: ${{ matrix.app }}
-      NAME: ${{ matrix.name }}
-      VERSION: ${{ matrix.version }}
+      NAME: ${{ needs.plan.outputs.name }}
+      VERSION: ${{ needs.plan.outputs.version }}
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: ${{ matrix.app }}
+          name: ${{ inputs.app }}
           path: ${{ runner.temp }}
 
+      # This makes the <app>-v<version> tag too, which is how the next run knows it's out.
       - name: Release
         run: |
           zip="$RUNNER_TEMP/$NAME-$VERSION.zip"
@@ -111,16 +163,15 @@ jobs:
           gh release create "$APP-v$VERSION" "$zip" --target "$GITHUB_SHA" --title "$NAME $VERSION" \
             --notes "Install with \`brew install --cask yehogwon/vibes/$APP\`."
 
-  # Runs even when a release above failed, and keeps that app's cask as it was.
   tap:
     name: Update the tap
     needs: [plan, publish]
-    if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: macos-26
     timeout-minutes: 15
     environment: release
     env:
-      APPS: ${{ needs.plan.outputs.apps }}
+      NAME: ${{ needs.plan.outputs.name }}
+      VERSION: ${{ needs.plan.outputs.version }}
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
       - uses: actions/checkout@v7
@@ -134,28 +185,14 @@ jobs:
           ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
           path: tap
 
-      # The checksums come from the published zips, so each cask matches what Homebrew downloads.
-      - name: Write the casks
-        id: casks
+      # The checksum comes from the published zip, so the cask matches what Homebrew downloads.
+      - name: Write the cask
         run: |
+          zip="$NAME-$VERSION.zip"
+          gh release download "$APP-v$VERSION" -p "$zip" -D "$RUNNER_TEMP"
+          sha256="$(shasum -a 256 "$RUNNER_TEMP/$zip" | cut -d ' ' -f 1)"
           mkdir -p tap/Casks
-          casks=()
-          titles=()
-          while IFS=$'\t' read -r app name version; do
-            tag="$app-v$version"
-            zip="$name-$version.zip"
-            if ! gh release view "$tag" >/dev/null 2>&1; then
-              echo "::warning::$tag isn't released, so the $app cask stays as it was."
-              continue
-            fi
-            gh release download "$tag" -p "$zip" -D "$RUNNER_TEMP/$app"
-            sha256="$(shasum -a 256 "$RUNNER_TEMP/$app/$zip" | cut -d ' ' -f 1)"
-            "$app/cask.sh" "$version" "$sha256" > "tap/Casks/$app.rb"
-            if [ -n "$(git -C tap status --porcelain "Casks/$app.rb")" ]; then
-              casks+=("$app")
-              titles+=("$name $version")
-            fi
-          done < <(jq -r '.[] | [.app, .name, .version] | @tsv' <<<"$APPS")
+          "$APP/cask.sh" "$VERSION" "$sha256" > "tap/Casks/$APP.rb"
 
           {
             echo '# yehogwon/vibes'
@@ -169,38 +206,18 @@ jobs:
             echo 'The casks are written by the release workflow in yehogwon/vibes, so edit them there.'
           } > tap/README.md
 
-          if [ -z "$(git -C tap status --porcelain)" ]; then
-            echo "The tap is up to date."
-          fi
-          subject="List the casks in the README"
-          if [ ${#titles[@]} -gt 0 ]; then
-            printf -v subject '%s, ' "${titles[@]}"
-            subject="${subject%, }"
-          fi
-          {
-            echo "casks=${casks[*]}"
-            echo "subject=$subject"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Audit the casks
-        if: steps.casks.outputs.casks != ''
-        env:
-          CASKS: ${{ steps.casks.outputs.casks }}
-        run: |
-          # CASKS is split into words on purpose.
-          # shellcheck disable=SC2086
-          .github/scripts/audit-casks.sh tap $CASKS
+      - name: Audit the cask
+        run: .github/scripts/audit-casks.sh tap "$APP"
 
       - name: Push the tap
         working-directory: tap
-        env:
-          SUBJECT: ${{ steps.casks.outputs.subject }}
         run: |
           if [ -z "$(git status --porcelain)" ]; then
+            echo "The tap already has $NAME $VERSION."
             exit 0
           fi
           git add -A
           git -c user.name='github-actions[bot]' \
             -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m "$SUBJECT" -m "From yehogwon/vibes@$GITHUB_SHA"
+            commit -m "$NAME $VERSION" -m "From yehogwon/vibes@$GITHUB_SHA"
           git push origin HEAD
