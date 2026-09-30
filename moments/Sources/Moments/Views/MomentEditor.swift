@@ -26,10 +26,12 @@ struct MomentEditor: View {
     var body: some View {
         VStack(spacing: 0) {
             PageHeader(title: isNew ? "New \(kindName)" : "Edit \(kindName)") {
-                Button("Back", systemImage: "chevron.left") { app.route = .list }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .help("Back without saving (Esc)")
+                Button { app.route = .list } label: {
+                    IconLabel(title: "Back", systemImage: "chevron.left")
+                }
+                .buttonStyle(.borderless)
+                .padding(.leading, -4)
+                .help("Back without saving (Esc)")
             } trailing: {
                 Button("Save", action: save)
                     .keyboardShortcut(.return, modifiers: .command)
@@ -45,7 +47,7 @@ struct MomentEditor: View {
                 Button("Delete \(kindName)", role: .destructive) { app.delete(draft.id) }
                     .buttonStyle(.borderless)
                     .foregroundStyle(.red)
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .padding(.vertical, 10)
             }
         }
@@ -119,7 +121,7 @@ struct MomentEditor: View {
                     .toggleStyle(.checkbox)
             }
         }
-        .font(.system(size: 12))
+        .font(.callout)
         .controlSize(.small)
     }
 
@@ -153,11 +155,12 @@ struct MomentEditor: View {
                 .help("Type or pick an emoji (⌃⌘Space)")
             Button("Photo…", action: choosePhoto)
             if draft.imageData != nil {
-                Button("Remove", systemImage: "xmark.circle.fill") { draft.imageData = nil }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.secondary)
-                    .help("Remove the photo")
+                Button { draft.imageData = nil } label: {
+                    IconLabel(title: "Remove Photo", systemImage: "xmark.circle.fill", side: 20)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("Use the emoji or symbol instead")
             }
         }
     }
@@ -183,27 +186,33 @@ struct MomentEditor: View {
         draft.imageData = data
     }
 
+    /// One swatch per color, each a 20 pt target. The chosen one wears a ring, so the choice
+    /// doesn't rest on color alone.
     private var swatches: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 1) {
             ForEach(options(Palette.swatches, current: draft.colorHex), id: \.self) { hex in
+                let isSelected = draft.colorHex == hex
                 Button {
                     draft.colorHex = hex
                 } label: {
                     Circle()
                         .fill(Palette.color(hex: hex))
-                        .frame(width: 13, height: 13)
+                        .frame(width: 14, height: 14)
                         .overlay {
                             if hex.isEmpty {
                                 Image(systemName: "a")
-                                    .font(.system(size: 7, weight: .bold))
+                                    .font(.system(size: 8, weight: .bold))
                                     .foregroundStyle(.white)
                             }
                         }
-                        .padding(2)
-                        .overlay(Circle().strokeBorder(Color.primary.opacity(draft.colorHex == hex ? 0.6 : 0), lineWidth: 1.5))
+                        .frame(width: 20, height: 20)
+                        .overlay(Circle().strokeBorder(Color.primary.opacity(isSelected ? 0.6 : 0), lineWidth: 1.5))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .help(hex.isEmpty ? "Accent color" : "#\(hex)")
+                .help(Palette.name(hex: hex))
+                .accessibilityLabel(Palette.name(hex: hex))
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
     }

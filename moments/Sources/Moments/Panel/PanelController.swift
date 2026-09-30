@@ -170,7 +170,7 @@ final class PanelController {
         let frame = targetFrame()
         // Start a little higher and transparent, then settle into place.
         panel.alphaValue = 0
-        panel.setFrame(frame.offsetBy(dx: 0, dy: 8), display: false)
+        panel.setFrame(frame.offsetBy(dx: 0, dy: Self.reducesMotion ? 0 : 8), display: false)
         NSApp.unhideWithoutActivation()
         if pinned {
             mode = .pinned
@@ -209,7 +209,7 @@ final class PanelController {
         stopPinnedMonitors()
         generation += 1
         let current = generation
-        let frame = panel.frame.offsetBy(dx: 0, dy: 5)
+        let frame = panel.frame.offsetBy(dx: 0, dy: Self.reducesMotion ? 0 : 5)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.1
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -241,7 +241,7 @@ final class PanelController {
     }
 
     private func move(to frame: NSRect, animated: Bool) {
-        guard animated else {
+        guard animated, !Self.reducesMotion else {
             panel.setFrame(frame, display: true)
             return
         }
@@ -250,6 +250,12 @@ final class PanelController {
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             panel.animator().setFrame(frame, display: true)
         }
+    }
+
+    /// With Reduce Motion on, the panel only fades: it doesn't slide in or out, or glide between
+    /// items and heights.
+    private static var reducesMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
 
     /// The item the panel hangs from: its anchor, or the app's own item if that's gone from the

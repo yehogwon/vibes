@@ -44,6 +44,9 @@ struct MomentListPage: View {
                             }
                         }
                         .onTapGesture { app.edit(moment) }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { app.edit(moment) }
                         .contextMenu { menu(for: moment) }
                         .draggable(moment.id.uuidString) {
                             MomentRow(moment: moment, now: app.now)
@@ -62,7 +65,7 @@ struct MomentListPage: View {
                         }
                 }
             }
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 8)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight = $0 }
         }
         .scrollIndicators(.automatic)
@@ -79,29 +82,32 @@ struct MomentListPage: View {
 
     private var addMenu: some View {
         Menu {
-            Button("New D-Day", systemImage: "calendar") { app.newMoment(.date) }
-            Button("New Birthday", systemImage: "birthday.cake") { app.newMoment(.life) }
-            Button("New Progress Bar", systemImage: "chart.bar.fill") { app.newMoment(.progress) }
+            Button("New D-Day…", systemImage: "calendar") { app.newMoment(.date) }
+            Button("New Birthday…", systemImage: "birthday.cake") { app.newMoment(.life) }
+            Button("New Progress Bar…", systemImage: "chart.bar.fill") { app.newMoment(.progress) }
         } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 13, weight: .semibold))
+            IconLabel(title: "Add Moment", systemImage: "plus")
+                .font(.body.weight(.semibold))
         }
         .menuStyle(.button)
+        // Plain, since a borderless menu keeps its symbol's size as its hit area.
+        .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .buttonStyle(.borderless)
         .fixedSize()
         .help("Add a moment")
+        // The symbol, not its hit area, lines up with the panel's edge inset.
+        .padding(.trailing, -4)
     }
 
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "calendar.badge.clock")
-                .font(.system(size: 30, weight: .light))
+                .font(.system(size: 28))
                 .foregroundStyle(.secondary)
             Text("Count down to the days that matter.")
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(.secondary)
-            Button("Add a D-Day") { app.newMoment(.date) }
+            Button("New D-Day…") { app.newMoment(.date) }
                 .controlSize(.small)
         }
         .frame(maxWidth: .infinity)
@@ -114,7 +120,7 @@ struct MomentListPage: View {
             Banner(systemImage: "info.circle", message: notice) { app.store.dismissNotice() }
         }
         if let error = app.store.lastError {
-            Banner(systemImage: "exclamationmark.triangle", message: error)
+            Banner(systemImage: "exclamationmark.triangle.fill", symbolColor: .orange, message: error)
         }
     }
 
@@ -122,15 +128,17 @@ struct MomentListPage: View {
         HStack(spacing: 6) {
             SyncStatusLabel(status: app.store.status)
             Spacer()
-            Button("Settings", systemImage: "gearshape") { app.route = .settings }
-                .labelStyle(.iconOnly)
-                .help("Settings")
+            Button { app.route = .settings } label: {
+                IconLabel(title: "Settings", systemImage: "gearshape")
+            }
+            .help("Hover, login, and sync options (⌘,)")
         }
         .buttonStyle(.borderless)
-        .font(.system(size: 11))
+        .font(.subheadline)
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
+        .padding(.vertical, 4)
     }
 }
 

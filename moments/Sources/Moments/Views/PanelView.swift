@@ -39,32 +39,35 @@ struct PageHeader<Leading: View, Trailing: View>: View {
             leading
             VStack(alignment: .leading, spacing: 0) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.headline)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)
             trailing
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 8)
     }
 }
 
-/// A one-line notice, e.g. that an unreadable file was set aside.
+/// A short notice, e.g. that an unreadable file was set aside. Its text starts at the panel's
+/// edge inset, like everything else.
 struct Banner: View {
     var systemImage: String
+    /// Warnings color their symbol; the text stays legible in the label colors.
+    var symbolColor: Color = .secondary
     var message: String
     var dismiss: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: systemImage)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(symbolColor)
             Text(message)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -73,10 +76,24 @@ struct Banner: View {
                     .controlSize(.small)
             }
         }
-        .font(.system(size: 11.5))
-        .padding(10)
+        .font(.callout)
+        .padding(8)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
-        .padding(.horizontal, 10)
-        .padding(.bottom, 6)
+        .padding(.horizontal, 8)
+        .padding(.bottom, 8)
+    }
+}
+
+/// An icon-only button's label, with a hit area bigger than its symbol.
+struct IconLabel: View {
+    var title: String
+    var systemImage: String
+    var side: CGFloat = 24
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .labelStyle(.iconOnly)
+            .frame(width: side, height: side)
+            .contentShape(Rectangle())
     }
 }
