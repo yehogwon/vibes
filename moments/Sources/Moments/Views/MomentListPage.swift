@@ -15,6 +15,8 @@ struct MomentListPage: View {
     /// The press on a row, from the moment it's held long enough to pick up. Resets however the
     /// gesture ends, even when it's cancelled, so the row is always put down.
     @GestureState private var press = Press.none
+    /// The row last put down, and when, so the click that ends a hold doesn't also open it.
+    @State private var putDown: (id: UUID, at: Date)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let maxListHeight: CGFloat = 470
@@ -57,11 +59,11 @@ struct MomentListPage: View {
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                             rowHeights[moment.id] = $0
                         }
-                        .gesture(
-                            // A click edits; holding picks the row up instead.
-                            reorderGesture(for: moment.id)
-                                .exclusively(before: TapGesture().onEnded { app.edit(moment) })
-                        )
+                        // A click edits; holding picks the row up instead. They can't be one
+                        // exclusive gesture, which never lets the click through, so the click
+                        // skips a press that lifted the row.
+                        .onTapGesture { clicked(moment) }
+                        .simultaneousGesture(reorderGesture(for: moment.id))
                         .accessibilityElement(children: .combine)
                         .accessibilityAddTraits(.isButton)
                         .accessibilityAction { app.edit(moment) }
@@ -82,6 +84,14 @@ struct MomentListPage: View {
             case .none: drop()
             }
         }
+    }
+
+    /// Opens the moment, unless the click ended a hold that picked its row up. SwiftUI hands that
+    /// click over while the row is still lifted; the time covers it arriving after it's put down.
+    private func clicked(_ moment: Moment) {
+        let justPutDown = putDown.map { $0.id == moment.id && Date.now.timeIntervalSince($0.at) < 0.25 } ?? false
+        guard drag?.id != moment.id, !justPutDown else { return }
+        app.edit(moment)
     }
 
     // MARK: - Reordering
@@ -168,6 +178,7 @@ struct MomentListPage: View {
     private func drop() {
         guard let drag else { return }
         NSCursor.pop()
+        putDown = (drag.id, .now)
         withAnimation(shiftAnimation) {
             var ids = app.store.moments.map(\.id)
             if drag.to != drag.from, let from = ids.firstIndex(of: drag.id) {
