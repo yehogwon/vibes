@@ -5,7 +5,8 @@ name: Release
 # Resources/Info.plist keeps 0.0.0 as its version: the version comes from the app's last release,
 # the highest <app>-v<version> tag, raised by the bump picked, or is the exact one given instead,
 # which has to be higher. app.yml checks the app as CI does and builds it as that version, and the
-# zip it built is attached to a new release, which tags the commit. Then the app's cask
+# zip it built is attached to a new release, which tags the commit. Its notes list the PRs that
+# changed the app's folder since its last release. Then the app's cask
 # (<app>/cask.sh) for that release is written into yehogwon/homebrew-vibes, which
 # `brew install --cask yehogwon/vibes/<app>` reads.
 #
@@ -32,9 +33,9 @@ on:
         type: choice
         default: patch
         options:
-          - patch
-          - minor
           - major
+          - minor
+          - patch
       version:
         description: Or this exact version, such as 1.0.0
         type: string
@@ -65,6 +66,7 @@ jobs:
     outputs:
       name: ${{ steps.plan.outputs.name }}
       version: ${{ steps.plan.outputs.version }}
+      last: ${{ steps.plan.outputs.last }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -129,6 +131,7 @@ jobs:
           {
             echo "name=$name"
             echo "version=$version"
+            echo "last=$last"
           } >> "$GITHUB_OUTPUT"
 
   check:
@@ -149,7 +152,62 @@ jobs:
     env:
       NAME: ${{ needs.plan.outputs.name }}
       VERSION: ${{ needs.plan.outputs.version }}
+      LAST: ${{ needs.plan.outputs.last }}
     steps:
+      # All of main's history, to find what changed since the last release.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # GitHub's generated notes would list every PR since the last tag, whichever app it changed.
+      # These list the PRs merged into main that changed this app's folder, by title. A title can
+      # start with a type, as in Conventional Commits ("feat: ", "fix(jots): "): features and fixes
+      # get sections of their own, chore, ci, docs, refactor, test, build and style are left out,
+      # and a title without a type goes under Other changes.
+      - name: Write the notes
+        run: |
+          range="$GITHUB_SHA"
+          if [ -n "$LAST" ]; then
+            range="$APP-v$LAST..$GITHUB_SHA"
+          fi
+          typed='^(feat|fix|chore|ci|docs|refactor|test|build|style)(\([^)]*\))?!?: *(.+)$'
+          features=()
+          fixes=()
+          others=()
+          while read -r sha; do
+            # The PR this commit merged, or else one it was part of.
+            pr="$(gh api "repos/$GH_REPO/commits/$sha/pulls" \
+              --jq "(map(select(.merge_commit_sha == \"$sha\")) + .) | first | select(.) | \"\(.title) (#\(.number))\"")"
+            title="${pr:-$(git log -1 --format=%s "$sha")}"
+            if [[ ! "$title" =~ $typed ]]; then
+              others+=("- $title")
+            elif [ "${BASH_REMATCH[1]}" = feat ]; then
+              features+=("- ${BASH_REMATCH[3]^}")
+            elif [ "${BASH_REMATCH[1]}" = fix ]; then
+              fixes+=("- ${BASH_REMATCH[3]^}")
+            fi
+          done < <(git log --first-parent --format=%H "$range" -- "$APP")
+
+          section() {
+            if [ $# -gt 1 ]; then
+              printf '### %s\n\n' "$1"
+              printf '%s\n' "${@:2}"
+              echo
+            fi
+          }
+          {
+            if [ $((${#features[@]} + ${#fixes[@]} + ${#others[@]})) -eq 0 ]; then
+              echo "No new features or fixes${LAST:+ since $NAME $LAST}."
+              echo
+            fi
+            section New "${features[@]}"
+            section Fixes "${fixes[@]}"
+            section 'Other changes' "${others[@]}"
+            echo "Install with \`brew install --cask yehogwon/vibes/$APP\`."
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
       - uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.app }}
@@ -161,7 +219,7 @@ jobs:
           zip="$RUNNER_TEMP/$NAME-$VERSION.zip"
           mv "$RUNNER_TEMP/$NAME.zip" "$zip"
           gh release create "$APP-v$VERSION" "$zip" --target "$GITHUB_SHA" --title "$NAME $VERSION" \
-            --notes "Install with \`brew install --cask yehogwon/vibes/$APP\`."
+            --notes-file "$RUNNER_TEMP/notes.md"
 
   tap:
     name: Update the tap
