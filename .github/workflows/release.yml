@@ -4,9 +4,9 @@ name: Release
 # `gh workflow run release.yml -f app=jots -f bump=minor`. An app ships once it has a cask.sh. Its
 # Resources/Info.plist keeps 0.0.0 as its version: the version comes from the app's last release,
 # the highest <app>-v<version> tag, raised by the bump picked, or is the exact one given instead,
-# which has to be higher. app.yml checks the app as CI does and builds it as that version, and the
-# zip it built is attached to a new release, which tags the commit. Its notes list the PRs that
-# changed the app's folder since its last release. Then the app's cask
+# which has to be higher. app.yml checks the app as CI does and builds it as that version, the
+# commit is tagged, and the zip it built is attached to a release on that tag. Its notes list the
+# PRs that changed the app's folder since its last release. Then the app's cask
 # (<app>/cask.sh) for that release is written into yehogwon/homebrew-vibes, which
 # `brew install --cask yehogwon/vibes/<app>` reads.
 #
@@ -15,7 +15,10 @@ name: Release
 #
 # Pushing to the tap takes a deploy key with write access to yehogwon/homebrew-vibes, whose private
 # half is the HOMEBREW_TAP_DEPLOY_KEY secret of this repository's release environment, which only
-# main can use.
+# main can use. The tag is pushed with another, one with write access to this repository, whose
+# private half is the environment's VIBES_DEPLOY_KEY: GitHub won't let the run's own token tag a
+# commit whose workflows differ from main's, as they do once a change to them merges during a run.
+# Without that secret, the run's own token pushes the tag.
 on:
   workflow_dispatch:
     inputs:
@@ -147,6 +150,8 @@ jobs:
     needs: [plan, check]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # For VIBES_DEPLOY_KEY.
+    environment: release
     permissions:
       contents: write
     env:
@@ -154,11 +159,12 @@ jobs:
       VERSION: ${{ needs.plan.outputs.version }}
       LAST: ${{ needs.plan.outputs.last }}
     steps:
-      # All of main's history, to find what changed since the last release.
+      # All of main's history, to find what changed since the last release. The credentials are
+      # kept, to push the tag with.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          persist-credentials: false
+          ssh-key: ${{ secrets.VIBES_DEPLOY_KEY }}
 
       # GitHub's generated notes would list every PR since the last tag, whichever app it changed.
       # These list the PRs merged into main that changed this app's folder, by title. A title can
@@ -213,12 +219,21 @@ jobs:
           name: ${{ inputs.app }}
           path: ${{ runner.temp }}
 
-      # This makes the <app>-v<version> tag too, which is how the next run knows it's out.
+      # The <app>-v<version> tag is how the next run knows this version is out.
+      - name: Tag the commit
+        run: |
+          tag="$APP-v$VERSION"
+          # A re-run finds the tag it made before.
+          if [ "$(git rev-parse -q --verify "refs/tags/$tag^{commit}")" != "$GITHUB_SHA" ]; then
+            git tag "$tag" "$GITHUB_SHA"
+          fi
+          git push origin "refs/tags/$tag"
+
       - name: Release
         run: |
           zip="$RUNNER_TEMP/$NAME-$VERSION.zip"
           mv "$RUNNER_TEMP/$NAME.zip" "$zip"
-          gh release create "$APP-v$VERSION" "$zip" --target "$GITHUB_SHA" --title "$NAME $VERSION" \
+          gh release create "$APP-v$VERSION" "$zip" --verify-tag --title "$NAME $VERSION" \
             --notes-file "$RUNNER_TEMP/notes.md"
 
   tap:
