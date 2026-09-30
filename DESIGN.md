@@ -115,11 +115,11 @@ scale across apps. (`typography.md › macOS built-in text styles`)
   ⌘Return. (`buttons.md › Style`)
 - **Icon-only buttons** use an SF Symbol and `Button(_:systemImage:)` with `.labelStyle(.iconOnly)`,
   so VoiceOver has a name. Their hit area is at least 24 × 24 pt in compact surfaces (the platform
-  minimum is 20 × 20, the default 28 × 28), and a tooltip names the action and its shortcut.
+  minimum is 20 × 20, the default 28 × 28), and a tooltip says what they do, with the shortcut.
   (`accessibility.md › Mobility`; `buttons.md › Content`)
-- **Custom clickable things** get a hover highlight (primary at 7% opacity, row radius), a press
-  state, the button accessibility trait, and a default accessibility action.
-  (`buttons.md`: "Always include a press state for a custom button.")
+- **Clickable rows** get a hover highlight (primary at 7% opacity, row radius), the button
+  accessibility trait, and a default accessibility action. Custom buttons also get a press
+  state. (`buttons.md`: "Always include a press state for a custom button.")
 - **Choices over typing:** pickers, date fields, swatches. A swatch names its color for VoiceOver
   and in its tooltip, and shows selection with a ring, not by color alone. (`color.md › Inclusive
   color`)
@@ -150,6 +150,9 @@ scale across apps. (`typography.md › macOS built-in text styles`)
 - **Buttons are verbs and name their object:** "Delete Photo", "Copy All". An ellipsis (…)
   marks anything that asks for more before it acts, wherever the command appears. (`menus.md`;
   `buttons.md › Push buttons`)
+- **Tooltips** are brief sentence-case fragments that say what a control does without repeating
+  its name, followed by its shortcut in parentheses: "Copy everything (⇧⌘C)".
+  (`offering-help.md`)
 - **Errors say what happened and what to do.** No "we", no "oops", no apology. (`writing.md`)
 - **Name what people see,** like "On this Mac" or "iCloud Drive › Folder", never how it's built.
 
