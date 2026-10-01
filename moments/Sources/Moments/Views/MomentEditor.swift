@@ -10,6 +10,7 @@ struct MomentEditor: View {
     @State private var draft: Moment
     @FocusState private var isNameFocused: Bool
     @State private var emojiTarget = EmojiTarget()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The moment as editing began. Only what changed since is saved, so an edit arriving from
     /// another Mac meanwhile survives.
     let original: Moment
@@ -27,7 +28,8 @@ struct MomentEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageHeader(title: isNew ? "New \(kindName)" : "Edit \(kindName)") {
+            // A new moment's kind is in the picker right below, so the title doesn't repeat it.
+            PageHeader(title: isNew ? "New Moment" : "Edit \(kindName)") {
                 Button { app.route = .list } label: {
                     IconLabel(title: "Back", systemImage: "chevron.left")
                 }
@@ -40,6 +42,11 @@ struct MomentEditor: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .help("Save (⌘↩)")
+            }
+            if isNew {
+                kindPicker
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
             }
             form
                 .padding(.horizontal, 16)
@@ -61,6 +68,33 @@ struct MomentEditor: View {
         case .progress: "Progress Bar"
         default: "D-Day"
         }
+    }
+
+    /// Only while adding: an existing moment keeps its kind. Switching starts the kind's own rows
+    /// over and keeps the ones every kind has.
+    private var kindPicker: some View {
+        Picker(
+            "Kind",
+            selection: Binding {
+                draft.kind
+            } set: { kind in
+                // Picking the kind already chosen mustn't reset its date.
+                guard kind != draft.kind else { return }
+                // The rows fade while the last one moves with the panel's edge, which resizes to
+                // fit them on this same curve.
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) { draft.switchKind(to: kind) }
+            }
+        ) {
+            Text("D-Day").tag(Moment.Kind.date)
+                .help("Count down to a day, or up from one")
+            Text("Progress").tag(Moment.Kind.progress)
+                .help("Show how far along a day, week, year, or other span is")
+            Text("Birthday").tag(Moment.Kind.life)
+                .help("Count someone's age from the day they were born")
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
     }
 
     private var form: some View {
@@ -118,13 +152,28 @@ struct MomentEditor: View {
                 }
                 row("Remind") { reminderPicker }
             }
-            row("") {
+            GridRow(alignment: .center) {
+                labelColumnStrut
                 Toggle("Show in the menu bar", isOn: $draft.inMenubar)
                     .toggleStyle(.checkbox)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .font(.callout)
         .controlSize(.small)
+    }
+
+    /// While adding, the labels of every kind's rows, out of sight, so the label column is
+    /// always as wide as its widest and switching kinds doesn't shift the fields sideways.
+    private var labelColumnStrut: some View {
+        ZStack {
+            if isNew {
+                ForEach(["Span", "Starts", "Ends", "Born", "Date", "Repeat", "Count in", "Remind"], id: \.self) {
+                    Text($0)
+                }
+            }
+        }
+        .hidden()
     }
 
     private func row<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {

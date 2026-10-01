@@ -78,12 +78,7 @@ final class AppState {
     // MARK: - Editing
 
     func newMoment(_ kind: Moment.Kind) {
-        let today = Calendar.current.startOfDay(for: now)
-        let moment = Moment(
-            kind: kind, date: kind == .progress ? now : today, startDate: today,
-            endDate: kind == .progress ? Calendar.current.date(byAdding: .month, value: 1, to: today) : nil,
-            sortWeight: store.nextSortWeight, createdAt: now)
-        route = .editor(moment, isNew: true)
+        route = .editor(Moment(new: kind, at: now, sortWeight: store.nextSortWeight), isNew: true)
     }
 
     func edit(_ moment: Moment) {
