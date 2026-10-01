@@ -5,7 +5,7 @@ import SwiftUI
 /// Moment colors are stored as `RRGGBB`, or empty for the accent color.
 ///
 /// Each color comes in two strengths: the color itself (the *fill*), for swatches and washes, and
-/// an *ink* for what has to be read against the panel, such as counts, symbols, rings, and bars.
+/// an *ink* for what has to be read against the panel, such as counts, symbols, labels, and bars.
 enum Palette {
     /// The choices in the editor: the default, then the system colors in their dark variants,
     /// which is what the original app stores.
@@ -104,15 +104,17 @@ enum Palette {
 extension Moment {
     /// The moment's color, for washes behind its symbol and bar.
     var tint: Color { Palette.color(hex: colorHex) }
-    /// The moment's color where it has to be read: its count, symbol, ring, and bar.
+    /// The moment's color where it has to be read: its count, symbol, label, and bar.
     var ink: Color { Palette.ink(hex: colorHex) }
 }
 
-/// A moment's picture: its photo, its emoji, or a symbol for its kind, in a circle. Progress bars
-/// without a picture show a ring of how far along they are.
+/// A moment's picture: its photo, its emoji, or a symbol for its kind, in a circle. A progress bar
+/// names its span there instead, like Oct or Q4, since the row beside it already shows how far
+/// along it is.
 struct AvatarView: View {
     let moment: Moment
-    var fraction: Double?
+    /// When it's shown, which decides a progress bar's span.
+    var now = Date.now
     var size: CGFloat = 30
 
     var body: some View {
@@ -125,22 +127,36 @@ struct AvatarView: View {
                 Circle().fill(moment.tint.opacity(0.16))
                 Text(moment.emoji)
                     .font(.system(size: size * 0.54))
-            } else if let fraction {
-                Circle().stroke(moment.tint.opacity(0.18), lineWidth: 3.5)
-                Circle()
-                    .trim(from: 0, to: fraction)
-                    .stroke(moment.ink, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .padding(0.5)
+            } else if moment.kind == .progress, let label = moment.spanLabel(at: now) {
+                Circle().fill(moment.tint.opacity(0.16))
+                // Bold, since the wash behind it takes the ink below 4.5:1 for some colors, and
+                // bold text needs only 3:1.
+                Text(label.text)
+                    .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
+                    .foregroundStyle(moment.ink)
+                    .lineLimit(1)
+                    // Week numbers are the widest; they shrink to 11 pt to keep clear of the edge.
+                    .minimumScaleFactor(11 / 12)
+                    .frame(maxWidth: size * 0.9)
+                    .accessibilityLabel(label.spoken)
             } else {
                 Circle().fill(moment.tint.opacity(0.16))
-                Image(systemName: moment.kind == .life ? "birthday.cake.fill" : "calendar")
+                Image(systemName: symbol)
                     .font(.system(size: size * 0.42, weight: .semibold))
                     .foregroundStyle(moment.ink)
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
+    }
+
+    private var symbol: String {
+        switch moment.kind {
+        case .life: "birthday.cake.fill"
+        // Custom dates have no name to show.
+        case .progress: "hourglass.bottomhalf.filled"
+        default: "calendar"
+        }
     }
 }
 
