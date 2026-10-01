@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func showSettings(_ sender: Any?) {
-        closeScratchpad(sender)
-        state.showSettings()
+        state.showsSettings = true
+        panel?.open()
     }
 }

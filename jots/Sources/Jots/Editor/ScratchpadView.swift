@@ -86,10 +86,7 @@ struct ScratchpadView: View {
                 Button("Export as Markdown…") { app.export() }
                 Button("Show in Finder") { app.showInFinder() }
                 Divider()
-                Button("Settings…") {
-                    app.closeScratchpad()
-                    app.showSettings()
-                }
+                Button("Settings…") { app.showsSettings = true }
                 Button("Quit Jots") { NSApp.terminate(nil) }
             } label: {
                 IconLabel(title: "More", systemImage: "ellipsis.circle")
