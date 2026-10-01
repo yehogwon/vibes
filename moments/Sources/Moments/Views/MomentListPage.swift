@@ -26,7 +26,7 @@ struct MomentListPage: View {
             PageHeader(title: "Moments", subtitle: app.now.formatted(.dateTime.weekday(.wide).month(.wide).day())) {
                 EmptyView()
             } trailing: {
-                addMenu
+                addButton
             }
             banners
             if app.store.moments.isEmpty {
@@ -214,21 +214,14 @@ struct MomentListPage: View {
         Button("Delete", role: .destructive) { app.store.delete(moment.id) }
     }
 
-    private var addMenu: some View {
-        Menu {
-            Button("New D-Day…", systemImage: "calendar") { app.newMoment(.date) }
-            Button("New Birthday…", systemImage: "birthday.cake") { app.newMoment(.life) }
-            Button("New Progress Bar…", systemImage: "chart.bar.fill") { app.newMoment(.progress) }
-        } label: {
+    /// Opens the editor on a D-Day, as ⌘N does; the kind can be switched there.
+    private var addButton: some View {
+        Button { app.newMoment(.date) } label: {
             IconLabel(title: "Add Moment", systemImage: "plus")
                 .font(.body.weight(.semibold))
         }
-        .menuStyle(.button)
-        // Plain, since a borderless menu keeps its symbol's size as its hit area.
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Add a moment")
+        .help("Add a moment (⌘N)")
         // The symbol, not its hit area, lines up with the panel's edge inset.
         .padding(.trailing, -4)
     }
