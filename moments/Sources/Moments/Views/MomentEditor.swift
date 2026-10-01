@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import MomentsCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -155,7 +156,9 @@ struct MomentEditor: View {
                 EmojiReceiver(target: emojiTarget) { draft.emoji = $0 }
                     .frame(width: 1, height: 1)
                     .accessibilityHidden(true)
+                    .onDisappear(perform: emojiTarget.close)
             }
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { emojiTarget.buttonSize = $0 }
             .accessibilityLabel("Emoji")
             .accessibilityValue(draft.emoji)
             .help("Pick from Emoji & Symbols")
@@ -318,14 +321,72 @@ struct MomentEditor: View {
 
 /// Opens the Emoji & Symbols viewer for the editor's emoji button. The viewer types into the key
 /// window's first responder, so the button hands focus to an `EmojiReceiver` first.
+///
+/// The viewer closes itself on Esc, but stays up through clicks in the app, even ones that move
+/// focus. So while it's open, a click anywhere else in the app closes it, as a click away from a
+/// text field does, and a click on the button closes it, as a click in the field does.
 @MainActor
 final class EmojiTarget {
     fileprivate weak var view: EmojiTextView?
+    /// The emoji button's size. The receiver sits at its center.
+    var buttonSize = CGSize.zero
+    private var clickMonitor: Any?
 
     func pick() {
         guard let view, let window = view.window else { return }
+        if clickMonitor != nil, Self.isViewerOpen {
+            return close()
+        }
         window.makeFirstResponder(view)
-        NSApp.orderFrontCharacterPalette(nil)
+        // The text view's input context takes over only once this click is handled. Asked for
+        // sooner, the viewer can open loose, away from the button, or not at all.
+        DispatchQueue.main.async { NSApp.orderFrontCharacterPalette(nil) }
+        guard clickMonitor == nil else { return }
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) {
+            [weak self] event in
+            MainActor.assumeIsolated {
+                guard let self, !self.isOnButton(event) else { return }
+                self.close()
+            }
+            return event
+        }
+    }
+
+    /// Closes the viewer, if the button opened it, and lets go of keyboard focus, so what's typed
+    /// next doesn't become the emoji.
+    func close() {
+        guard let clickMonitor else { return }
+        NSEvent.removeMonitor(clickMonitor)
+        self.clickMonitor = nil
+        if let viewer = Self.viewer {
+            TISDeselectInputSource(viewer)
+        }
+        if let view, view.window?.firstResponder === view {
+            view.window?.makeFirstResponder(nil)
+        }
+    }
+
+    private func isOnButton(_ event: NSEvent) -> Bool {
+        guard let view, event.window === view.window else { return false }
+        let point = view.convert(event.locationInWindow, from: nil)
+        return abs(point.x - view.bounds.midX) <= buttonSize.width / 2
+            && abs(point.y - view.bounds.midY) <= buttonSize.height / 2
+    }
+
+    /// The input source behind the viewer. It's selected while the viewer is open, and deselecting
+    /// it is the one way to close the viewer: neither taking focus from its text view nor asking
+    /// the input context closes it.
+    private static var viewer: TISInputSource? {
+        let filter = [kTISPropertyInputSourceID as String: "com.apple.CharacterPaletteIM"] as CFDictionary
+        return (TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource])?.first
+    }
+
+    /// Whether the viewer is still open. It closes itself on Esc, which the app never sees.
+    private static var isViewerOpen: Bool {
+        guard let viewer, let selected = TISGetInputSourceProperty(viewer, kTISPropertyInputSourceIsSelected) else {
+            return false
+        }
+        return CFBooleanGetValue(Unmanaged<CFBoolean>.fromOpaque(selected).takeUnretainedValue())
     }
 }
 
