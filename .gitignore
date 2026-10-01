@@ -293,4 +293,6 @@ iOSInjectionProject/
 
 /.claude/*
 !/.claude/skills/
+!/.claude/plugins/
+!/.claude/settings.json
 .vscode
