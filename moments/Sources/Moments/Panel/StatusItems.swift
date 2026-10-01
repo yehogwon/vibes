@@ -129,42 +129,32 @@ final class StatusItems: NSObject {
 }
 
 
-/// What a moment's menu bar item shows: "🎂 D-12", a photo and "D-12", a ring and "74%".
+/// What a moment's menu bar item shows: "🎂 D-12", a photo and "D-12", "Oct 74%".
 private struct ItemContent: Equatable {
     var title: String
-    var fraction: Double?
-    var colorHex: String
     var imageHash: Int?
 
     init(moment: Moment, now: Date) {
-        colorHex = moment.colorHex
         imageHash = moment.imageData?.hashValue
+        let count: String
+        // What stands in for a photo or emoji: the moment's name, or the span a progress bar's
+        // avatar names.
+        var name = String(moment.displayName.prefix(14))
         if moment.kind == .progress {
-            let progress = moment.progress(at: now)
-            fraction = (progress.fraction * 100).rounded(.down) / 100
-            title = progress.percent
+            count = moment.progress(at: now).percent
+            name = moment.spanLabel(at: now)?.text ?? name
         } else {
-            fraction = nil
-            let days = moment.dayCount(on: now).days
-            let count = Moment.dDay(days)
-            title =
-                if moment.imageData != nil { count }
-                else if !moment.emoji.isEmpty { "\(moment.emoji) \(count)" }
-                else { "\(String(moment.displayName.prefix(14))) \(count)" }
+            count = Moment.dDay(moment.dayCount(on: now).days)
         }
-        if moment.imageData != nil || fraction != nil {
-            title = " " + title
-        }
+        title =
+            if moment.imageData != nil { " \(count)" }
+            else if !moment.emoji.isEmpty { "\(moment.emoji) \(count)" }
+            else { "\(name) \(count)" }
     }
 
     func image(for moment: Moment) -> NSImage? {
-        if let data = moment.imageData, let photo = NSImage(data: data) {
-            return Self.circular(photo, side: 16)
-        }
-        if let fraction {
-            return Self.ring(fraction, color: Palette.inkNSColor(hex: colorHex), side: 15)
-        }
-        return nil
+        guard let data = moment.imageData, let photo = NSImage(data: data) else { return nil }
+        return Self.circular(photo, side: 16)
     }
 
     private static func circular(_ photo: NSImage, side: CGFloat) -> NSImage {
@@ -177,26 +167,6 @@ private struct ItemContent: Equatable {
                 in: NSRect(
                     x: rect.midX - drawn.width / 2, y: rect.midY - drawn.height / 2, width: drawn.width,
                     height: drawn.height))
-            return true
-        }
-    }
-
-    private static func ring(_ fraction: Double, color: NSColor, side: CGFloat) -> NSImage {
-        NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
-            let lineWidth: CGFloat = 2.5
-            let circle = rect.insetBy(dx: lineWidth / 2, dy: lineWidth / 2)
-            let track = NSBezierPath(ovalIn: circle)
-            track.lineWidth = lineWidth
-            NSColor.labelColor.withAlphaComponent(0.2).setStroke()
-            track.stroke()
-            let arc = NSBezierPath()
-            arc.appendArc(
-                withCenter: NSPoint(x: circle.midX, y: circle.midY), radius: circle.width / 2, startAngle: 90,
-                endAngle: 90 - 360 * fraction, clockwise: true)
-            arc.lineWidth = lineWidth
-            arc.lineCapStyle = .round
-            color.setStroke()
-            arc.stroke()
             return true
         }
     }

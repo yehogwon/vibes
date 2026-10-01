@@ -9,12 +9,10 @@ struct MomentRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            AvatarView(moment: moment, now: now)
             if moment.kind == .progress {
-                let progress = moment.progress(at: now)
-                AvatarView(moment: moment, fraction: progress.fraction)
-                progressBody(progress)
+                progressBody(moment.progress(at: now))
             } else {
-                AvatarView(moment: moment)
                 countBody
             }
         }

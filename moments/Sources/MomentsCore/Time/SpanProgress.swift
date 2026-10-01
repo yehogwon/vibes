@@ -14,6 +14,14 @@ public struct SpanProgress: Equatable, Sendable {
     }
 }
 
+/// What a progress moment's span is called at some instant, short enough for its avatar.
+public struct SpanLabel: Equatable, Sendable {
+    /// "Thu", "W40", "Oct", "Q4", "’26".
+    public var text: String
+    /// The same in words, for VoiceOver: "Thursday", "Week 40", "October", "Quarter 4", "2026".
+    public var spoken: String
+}
+
 extension Moment {
     /// The stretch of time a progress moment covers at `now`, e.g. this week.
     public func progressInterval(at now: Date, calendar: Calendar = .current) -> DateInterval {
@@ -62,6 +70,36 @@ extension Moment {
             detail = "Day \(day) of \(total)"
         }
         return SpanProgress(interval: interval, fraction: fraction, detail: detail)
+    }
+
+    /// What the span a progress moment covers at `now` is called, short enough for its avatar.
+    /// Custom dates have no such name.
+    public func spanLabel(at now: Date, calendar: Calendar = .current) -> SpanLabel? {
+        let parts = calendar.dateComponents([.year, .month, .weekday, .weekOfYear], from: now)
+        let month = (parts.month ?? 1) - 1
+        switch span {
+        case .day:
+            let weekday = (parts.weekday ?? 1) - 1
+            return SpanLabel(
+                text: calendar.shortStandaloneWeekdaySymbols[weekday],
+                spoken: calendar.standaloneWeekdaySymbols[weekday])
+        case .week:
+            let week = parts.weekOfYear ?? 1
+            return SpanLabel(text: "W\(week)", spoken: "Week \(week)")
+        case .month:
+            return SpanLabel(
+                text: calendar.shortStandaloneMonthSymbols[month],
+                spoken: calendar.standaloneMonthSymbols[month])
+        case .quarter:
+            let quarter = month / 3 + 1
+            return SpanLabel(text: "Q\(quarter)", spoken: "Quarter \(quarter)")
+        case .year:
+            // Four digits don't fit at a size people can read.
+            let year = parts.year ?? 0
+            return SpanLabel(text: String(format: "’%02d", year % 100), spoken: "\(year)")
+        default:
+            return nil
+        }
     }
 
     /// The name to show: the moment's own, or one that says what a progress bar measures.

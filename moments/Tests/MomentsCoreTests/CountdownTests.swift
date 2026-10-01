@@ -203,6 +203,19 @@ struct SpanProgressTests {
         #expect(moment.progress(at: seoul.date(2027, 8, 14), calendar: calendar).fraction == 1)
     }
 
+    @Test func namesTheSpanForTheAvatar() {
+        let now = seoul.date(2026, 10, 1, 9)  // a Thursday
+        func label(_ span: Moment.Span) -> SpanLabel? {
+            Moment(kind: .progress, date: now, span: span, createdAt: now).spanLabel(at: now, calendar: seoul.calendar)
+        }
+        #expect(label(.day) == SpanLabel(text: "Thu", spoken: "Thursday"))
+        #expect(label(.week) == SpanLabel(text: "W40", spoken: "Week 40"))
+        #expect(label(.month) == SpanLabel(text: "Oct", spoken: "October"))
+        #expect(label(.quarter) == SpanLabel(text: "Q4", spoken: "Quarter 4"))
+        #expect(label(.year) == SpanLabel(text: "’26", spoken: "2026"))
+        #expect(label(.custom) == nil)
+    }
+
     @Test func namesUnnamedProgressBars() {
         let now = Date.now
         #expect(Moment(kind: .progress, date: now, span: .month, createdAt: now).displayName == "This Month")
