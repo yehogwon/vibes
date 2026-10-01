@@ -159,12 +159,28 @@ struct MomentEditor: View {
             .accessibilityLabel("Emoji")
             .accessibilityValue(draft.emoji)
             .help("Pick from Emoji & Symbols")
-            if !draft.emoji.isEmpty {
-                removeButton("Remove Emoji", help: "Use the symbol instead") { draft.emoji = "" }
-            }
             Button("Photo…", action: choosePhoto)
-            if draft.imageData != nil {
-                removeButton("Remove Photo", help: "Use the emoji or symbol instead") { draft.imageData = nil }
+            if draft.imageData != nil || !draft.emoji.isEmpty {
+                removePictureButton
+            }
+        }
+        // As tall as the remove button, so the rows below stay put as it comes and goes.
+        .frame(minHeight: 24)
+    }
+
+    /// Removes the picture the icon shows: the photo, which wins over the emoji as in
+    /// `AvatarView`, or else the emoji. It's one button for both, so it keeps keyboard focus
+    /// when removing the photo leaves the emoji to remove.
+    private var removePictureButton: some View {
+        let isPhoto = draft.imageData != nil
+        return removeButton(
+            isPhoto ? "Remove Photo" : "Remove Emoji",
+            help: isPhoto ? "Use the emoji or symbol instead" : "Use the symbol instead"
+        ) {
+            if isPhoto {
+                draft.imageData = nil
+            } else {
+                draft.emoji = ""
             }
         }
     }
