@@ -3,6 +3,7 @@ import Carbon.HIToolbox
 import ServiceManagement
 import SwiftUI
 
+/// Settings live in the panel, in place of the scratchpad; Jots has no windows of its own.
 struct SettingsView: View {
     @Environment(AppState.self) private var app
     @AppStorage(SettingsKey.fontFamily) private var fontFamily = EditorFontFamily.system
@@ -15,11 +16,26 @@ struct SettingsView: View {
 
     var body: some View {
         @Bindable var app = app
-        Form {
-            Section("General") {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Button { app.showsSettings = false } label: {
+                    IconLabel(title: "Back", systemImage: "chevron.left")
+                }
+                .buttonStyle(.borderless)
+                .keyboardShortcut(.cancelAction)
+                .padding(.leading, -4)
+                .help("Back to the scratchpad (Esc)")
+                Text("Settings")
+                    .font(.headline)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+            VStack(alignment: .leading, spacing: 10) {
                 LabeledContent("Open Jots from anywhere") {
                     HotKeyRecorder(shortcut: $app.hotKey, onRecordingChange: app.pauseHotKey)
                 }
+                .fixedSize()
                 if let error = app.hotKeyError {
                     Label {
                         Text(error)
@@ -28,7 +44,6 @@ struct SettingsView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                     }
-                    .font(.subheadline)
                 }
                 Toggle("Show the scratchpad when the pointer rests on the menu bar icon", isOn: $opensOnHover)
                 Toggle("Open Jots at login", isOn: $opensAtLogin)
@@ -36,38 +51,46 @@ struct SettingsView: View {
                 if let loginItemMessage {
                     HStack {
                         Text(loginItemMessage)
-                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                         Button("Login Items…") { SMAppService.openSystemSettingsLoginItems() }
-                            .controlSize(.small)
                     }
                 }
-            }
-            Section("Editor") {
+                Divider()
+                    .padding(.vertical, 2)
                 Picker("Font", selection: $fontFamily) {
                     ForEach(EditorFontFamily.allCases) { family in
                         Text(family.label).tag(family)
                     }
                 }
+                .fixedSize()
                 LabeledContent("Size") {
                     Stepper(value: $fontSize, in: 10...28, step: 1) {
                         Text("\(Int(fontSize)) pt").monospacedDigit()
                     }
                 }
+                .fixedSize()
                 Toggle("Hide Markdown syntax outside the current line", isOn: $hidesSyntax)
-            }
-            Section("Storage") {
-                LabeledContent("Scratchpad", value: app.storageDescription)
-                if let hint = app.storageHint {
-                    Text(hint)
-                        .font(.subheadline)
+                Divider()
+                    .padding(.vertical, 2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Scratchpad")
+                        .font(.callout.weight(.medium))
+                    Text(app.storageDescription)
                         .foregroundStyle(.secondary)
+                    if let hint = app.storageHint {
+                        Text(hint)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
+            .toggleStyle(.checkbox)
+            .font(.callout)
+            .controlSize(.small)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 14)
         }
-        .formStyle(.grouped)
-        .frame(width: 460)
-        .fixedSize()
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear(perform: refreshLoginItem)
     }
 

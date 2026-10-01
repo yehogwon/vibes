@@ -28,6 +28,8 @@ final class AppState {
         }
     }
     private(set) var hotKeyError: String?
+    /// Whether the panel shows Settings in place of the scratchpad.
+    var showsSettings = false
 
     /// Set by the app delegate, which owns the panel.
     @ObservationIgnored var closeScratchpad: () -> Void = {}
@@ -39,7 +41,6 @@ final class AppState {
     @ObservationIgnored private let sandboxedURL = URL.homeDirectory.appendingPathComponent(
         "Library/Containers/io.github.yehogwon.Jots/Data/Library/Application Support/\(JotStorage.fileName)")
     @ObservationIgnored private let globalHotKey = GlobalHotKey()
-    @ObservationIgnored private var settingsWindow: SettingsWindowController?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     init() {
@@ -174,11 +175,5 @@ final class AppState {
 
     func reveal(_ url: URL) {
         NSWorkspace.shared.activateFileViewerSelecting([url])
-    }
-
-    func showSettings() {
-        let controller = settingsWindow ?? SettingsWindowController(state: self)
-        settingsWindow = controller
-        controller.show()
     }
 }

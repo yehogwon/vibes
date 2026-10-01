@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The panel that hangs under the menu bar icon and holds the scratchpad.
+/// The panel that hangs under the menu bar icon and holds the scratchpad, or Settings in its place.
 ///
 /// Resting the pointer on the icon *peeks* at the scratchpad: the panel zooms in from the icon
 /// without taking focus from the app in front, and zooms back out to it once the pointer leaves
@@ -21,6 +21,8 @@ final class PanelController {
     private let panel = MenuBarPanel(width: PanelController.size.width)
     private let state: AppState
     private let button: NSStatusBarButton
+    /// The height the page wants: the scratchpad's standard height, or Settings' natural height.
+    private var contentHeight = PanelController.size.height
     private var pendingPeek: Task<Void, Never>?
     private var leaveTimer: Timer?
     private var pointerLeftAt: Date?
@@ -38,8 +40,9 @@ final class PanelController {
     init(state: AppState, button: NSStatusBarButton) {
         self.state = state
         self.button = button
-        let content = NSHostingView(rootView: ScratchpadView().environment(state))
-        // The panel's size is fixed here; SwiftUI mustn't resize it.
+        let content = NSHostingView(
+            rootView: PanelView { [weak self] height in self?.contentHeightChanged(height) }.environment(state))
+        // The panel's frame is set here, following the page; SwiftUI mustn't resize it.
         content.sizingOptions = []
         panel.setContent(content)
         panel.onMouseDown = { [weak self] in
@@ -158,18 +161,45 @@ final class PanelController {
         stopLeaveTimer()
         stopPinnedMonitors()
         state.file.flush()
-        let panel = panel
         panel.zoomOut(toItemAt: itemMidX) {
-            // Hand focus back to the app that had it before the panel was pinned, unless one of
-            // Jots' own windows, like Settings, takes over.
-            let hasOtherWindows = NSApp.windows.contains { $0 !== panel && $0.isVisible }
-            if wasActive, NSApp.isActive, !hasOtherWindows {
+            // The scratchpad opens next time, not Settings.
+            if self.state.showsSettings {
+                self.state.showsSettings = false
+                self.contentHeight = Self.size.height
+            }
+            // Hand focus back to the app that had it before the panel was pinned.
+            if wasActive, NSApp.isActive {
                 NSApp.hide(nil)
             }
         }
     }
 
     // MARK: - Geometry
+
+    private func contentHeightChanged(_ height: CGFloat) {
+        guard abs(height - contentHeight) > 0.5 else { return }
+        contentHeight = height
+        guard mode != .hidden else { return }
+        move(to: targetFrame(), animated: true)
+    }
+
+    private func move(to frame: NSRect, animated: Bool) {
+        guard animated, !Self.reducesMotion else {
+            panel.setFrame(frame, display: true)
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.22
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().setFrame(frame, display: true)
+        }
+    }
+
+    /// With Reduce Motion on, the panel only fades: it doesn't zoom in or out, or glide between
+    /// heights.
+    private static var reducesMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
 
     private var itemRect: NSRect? {
         guard let window = button.window else { return nil }
@@ -192,7 +222,7 @@ final class PanelController {
         let item = itemRect ?? NSRect(x: visible.maxX - 100, y: visible.maxY, width: 0, height: 0)
         let size = Self.size
         let top = min(item.minY, visible.maxY) - MenuBarPanel.gap
-        let height = max(min(size.height, top - visible.minY - 12), 200)
+        let height = max(min(contentHeight, top - visible.minY - 12), 200)
         let x = min(max(item.midX - size.width / 2, visible.minX + 8), visible.maxX - size.width - 8)
         return NSRect(x: x.rounded(), y: (top - height).rounded(), width: size.width, height: height.rounded())
     }
@@ -259,5 +289,27 @@ final class PanelController {
         }
         outsideClickMonitor = nil
         resignObserver = nil
+    }
+}
+
+/// What the panel shows: the scratchpad, or Settings in its place. Settings reports its natural
+/// height so the panel can follow it, the way Moments' pages do.
+private struct PanelView: View {
+    @Environment(AppState.self) private var app
+    var onHeightChange: (CGFloat) -> Void
+
+    var body: some View {
+        Group {
+            if app.showsSettings {
+                SettingsView()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeightChange($0) }
+            } else {
+                ScratchpadView()
+                    .onAppear { onHeightChange(PanelController.size.height) }
+            }
+        }
+        .transition(.opacity.animation(.easeInOut(duration: 0.15)))
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 }
