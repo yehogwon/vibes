@@ -4,3 +4,4 @@
 - Commit subjects and PR titles follow Conventional Commits: `<type>(<app>): <change>`, like `feat(moments): reorder moments by dragging a row`, without the scope when the change isn't one app's. A release's notes list each PR that changed the app by its title: `feat` under New, `fix` under Fixes, and `chore`, `ci`, `docs`, `refactor`, `test`, `build` and `style` not at all, so type a PR by what people using the app will notice.
 - main requires one check, "CI", from `.github/workflows/ci.yml`. A new app needs its own job there, listed in the CI job's `needs`.
 - UI work follows `DESIGN.md`, and is reviewed with the apple-design skill (`.claude/skills/apple-design`) before it ships.
+- Issues and PRs fill in their template: one from `.github/ISSUE_TEMPLATE/` for an issue, and `.github/PULL_REQUEST_TEMPLATE/<type>.md` for a PR, where `<type>` is its title's type.

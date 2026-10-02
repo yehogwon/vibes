@@ -1,22 +1,18 @@
 <!--
-Title: <type>(<app>): <change>, like "fix(moments): open a moment when its row is clicked".
-Leave out the scope when the change isn't one app's. The release notes list the change after the
-colon, feat under New and fix under Fixes, and skip chore, ci, docs, refactor, test, build and
-style. So type it by what people using the app will notice.
+Title: feat(<app>): <change>, like "feat(<app>): reorder rows by dragging them". Leave out
+the scope when the change isn't one app's. The release notes list the change after the colon
+under New, so say what people using the app can now do.
 
 Delete any section below that doesn't apply, comments included.
 -->
 
-<!-- A sentence or two: what people saw before this, or what it adds. -->
-
-## Cause
-
-<!-- Fixes only: why it happened, down to the line or API that caused it. -->
+<!-- A sentence or two: what it adds, and what people did without it. -->
 
 ## What changed
 
 <!-- What someone using the app will notice, then the code changes a reviewer should know about.
-A table works well when the behavior differs by case. -->
+A table works well when the behavior differs by case. A new app also needs its own job in
+ci.yml, listed in the CI job's needs. -->
 
 ## Judgment calls
 
@@ -30,7 +26,7 @@ and whether it was fixed or accepted, citing the HIG page it comes from. -->
 ## Testing
 
 <!-- What you ran and what it showed: builds and tests (with the count), and what you checked in
-the running app and how. Run Moments against throwaway folders, never the real iCloud file.
+the running app and how. Run an app that syncs against throwaway folders, never its real files.
 End with what you didn't verify, so the reviewer knows what to try by hand. -->
 
 ## After merging
