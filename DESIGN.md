@@ -35,7 +35,7 @@ HIG decides. Each rule names the page it comes from, or says it's our own call.
   wider than 480 pt. (`popovers.md`: "Avoid making a popover too big.") Opened by the pointer, it
   *peeks*: it doesn't take focus, and closes once the pointer leaves both it and the item. A click
   in it *pins* it: it takes focus and stays until Esc or a click elsewhere. A click on the item
-  pins it too where the surface is for typing, as in Jots. Our call.
+  pins it too where the surface is for typing. Our call.
 - **One layer of glass.** The surface itself is Liquid Glass on macOS 26 and the `.popover`
   material before it: corner radius 18 pt on glass, 12 pt on the material. Nothing inside it is
   glass: rows, cards, and fields never are. (`materials.md › Liquid Glass`: "Don't use Liquid

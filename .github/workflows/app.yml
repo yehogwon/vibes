@@ -8,7 +8,7 @@ on:
   workflow_call:
     inputs:
       app:
-        description: The app's folder, such as jots.
+        description: The app's folder.
         required: true
         type: string
       open-args:
