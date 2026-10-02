@@ -1,7 +1,7 @@
 name: Release
 
 # Publishes one app from main through Homebrew, when it's run from the Actions tab or with
-# `gh workflow run release.yml -f app=jots -f bump=minor`. An app ships once it has a cask.sh. Its
+# `gh workflow run release.yml -f app=<app> -f bump=minor`. An app ships once it has a cask.sh. Its
 # Resources/Info.plist keeps 0.0.0 as its version: the version comes from the app's last release,
 # the highest <app>-v<version> tag, raised by the bump picked, or is the exact one given instead,
 # which has to be higher. app.yml checks the app as CI does and builds it as that version, the
@@ -168,7 +168,7 @@ jobs:
 
       # GitHub's generated notes would list every PR since the last tag, whichever app it changed.
       # These list the PRs merged into main that changed this app's folder, by title. A title can
-      # start with a type, as in Conventional Commits ("feat: ", "fix(jots): "): features and fixes
+      # start with a type, as in Conventional Commits ("feat: ", "fix(<app>): "): features and fixes
       # get sections of their own, chore, ci, docs, refactor, test, build and style are left out,
       # and a title without a type goes under Other changes.
       - name: Write the notes
