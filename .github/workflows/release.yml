@@ -28,6 +28,7 @@ on:
         type: choice
         # Each app with a cask.sh, which ci.yml checks.
         options:
+          - counter
           - jots
           - moments
       bump:
