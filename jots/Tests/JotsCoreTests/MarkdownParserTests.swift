@@ -122,6 +122,29 @@ struct BlockParsingTests {
         #expect(covered(.syntax, in: text) == ["- ", "- "])
     }
 
+    @Test func caretOnCheckbox() {
+        let text = "- [ ] a\n- [x] b\n```\n- [ ] code\n```" as NSString
+        let checkbox = NSRange(location: 2, length: 3)
+        func touched(_ selections: NSRange...) -> Set<NSRange> {
+            MarkdownParser.checkboxes(touching: selections, in: text)
+        }
+        // From just before the "[" through just after the "]", not once the text starts.
+        for caret in 2...5 {
+            #expect(touched(NSRange(location: caret, length: 0)) == [checkbox])
+        }
+        #expect(touched(NSRange(location: 1, length: 0)).isEmpty)
+        #expect(touched(NSRange(location: 6, length: 0)).isEmpty)
+        // Either end of a selection counts, and each caret of a multiple selection.
+        #expect(touched(NSRange(location: 0, length: 3)) == [checkbox])
+        #expect(touched(NSRange(location: 3, length: 9)) == [checkbox, NSRange(location: 10, length: 3)])
+        #expect(touched(NSRange(location: 0, length: 1), NSRange(location: 11, length: 0)) == [
+            NSRange(location: 10, length: 3)
+        ])
+        // A selection over a checkbox doesn't reveal it, and code has none.
+        #expect(touched(NSRange(location: 0, length: 7)).isEmpty)
+        #expect(touched(text.range(of: "[ ] code")).isEmpty)
+    }
+
     @Test func horizontalRuleBeatsBullet() {
         #expect(kinds(in: "* * *").contains(.horizontalRule))
         #expect(kinds(in: "---").contains(.horizontalRule))

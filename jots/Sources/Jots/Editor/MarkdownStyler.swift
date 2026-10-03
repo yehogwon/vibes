@@ -15,10 +15,12 @@ struct MarkdownStyler {
     ///
     /// - Parameters:
     ///   - revealed: Line ranges that keep their syntax visible (the caret's lines).
+    ///   - checkboxes: Checkboxes shown as text instead of drawn, since the caret is on them.
     ///   - codeBlocks: The text's fenced code blocks, if known.
     @discardableResult
     func style(
-        _ storage: NSTextStorage, in range: NSRange, revealed: [NSRange], codeBlocks: [NSRange]? = nil
+        _ storage: NSTextStorage, in range: NSRange, revealed: [NSRange], checkboxes: Set<NSRange>,
+        codeBlocks: [NSRange]? = nil
     ) -> NSRange {
         let text = storage.mutableString
         let result = MarkdownParser.parse(text, in: range, codeBlocks: codeBlocks)
@@ -38,7 +40,9 @@ struct MarkdownStyler {
             while spanIndex < result.spans.endIndex, result.spans[spanIndex].range.location < NSMaxRange(lineRange) {
                 spanIndex += 1
             }
-            styleLine(lineRange, spans: result.spans[first..<spanIndex], storage: storage, revealed: revealed)
+            styleLine(
+                lineRange, spans: result.spans[first..<spanIndex], storage: storage, revealed: revealed,
+                checkboxes: checkboxes)
             location = NSMaxRange(lineRange)
         }
         storage.endEditing()
@@ -57,7 +61,8 @@ struct MarkdownStyler {
     /// then inline traits, then markers (which may hide text), then the paragraph style, whose
     /// hanging indent depends on the final width of the line's prefix.
     private func styleLine(
-        _ lineRange: NSRange, spans: ArraySlice<MarkdownSpan>, storage: NSTextStorage, revealed: [NSRange]
+        _ lineRange: NSRange, spans: ArraySlice<MarkdownSpan>, storage: NSTextStorage, revealed: [NSRange],
+        checkboxes: Set<NSRange>
     ) {
         guard !spans.isEmpty else { return }
         var info = LineInfo()
@@ -68,7 +73,7 @@ struct MarkdownStyler {
             applyInline(span, to: storage)
         }
         for span in spans {
-            applyMarker(span, to: storage, revealed: revealed)
+            applyMarker(span, to: storage, revealed: revealed, checkboxes: checkboxes)
         }
         // A thematic break's `---` is drawn as a line instead, unless the caret is on it.
         for span in spans where span.kind == .horizontalRule && !isRevealed(span.range, in: revealed) {
@@ -155,7 +160,9 @@ struct MarkdownStyler {
         }
     }
 
-    private func applyMarker(_ span: MarkdownSpan, to storage: NSTextStorage, revealed: [NSRange]) {
+    private func applyMarker(
+        _ span: MarkdownSpan, to storage: NSTextStorage, revealed: [NSRange], checkboxes: Set<NSRange>
+    ) {
         let range = span.range
         switch span.kind {
         case .marker:
@@ -166,6 +173,10 @@ struct MarkdownStyler {
             storage.addAttributes([.foregroundColor: NSColor.clear, .markdownBullet: level], range: range)
         case .quoteMarker:
             storage.addAttributes([.foregroundColor: NSColor.clear, .markdownQuoteMarker: true], range: range)
+        // Same font either way, so revealing the source doesn't shift the line.
+        case .checkbox where checkboxes.contains(range):
+            storage.addAttributes(
+                [.font: cache.checkboxFont, .foregroundColor: NSColor.tertiaryLabelColor], range: range)
         case .checkbox(let checked):
             storage.addAttributes(
                 [

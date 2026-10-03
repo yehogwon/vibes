@@ -14,6 +14,8 @@ final class MarkdownTextView: NSTextView {
     private(set) var styler = MarkdownStyler()
     /// Lines currently styled with their syntax revealed.
     private var revealedLines: [NSRange] = []
+    /// Checkboxes currently styled as text, because the caret is on them.
+    private var revealedCheckboxes: Set<NSRange> = []
     /// Characters edited since the last restyle.
     private var dirtyRange: NSRange?
     /// An edit touched a code fence (or arrived without `shouldChangeText`), so everything after
@@ -94,9 +96,10 @@ final class MarkdownTextView: NSTextView {
     private func restyleAll() {
         guard let storage = textStorage else { return }
         revealedLines = currentRevealedLines()
+        revealedCheckboxes = currentRevealedCheckboxes()
         styler.style(
             storage, in: NSRange(location: 0, length: storage.length), revealed: revealedLines,
-            codeBlocks: currentCodeBlocks(in: storage))
+            checkboxes: revealedCheckboxes, codeBlocks: currentCodeBlocks(in: storage))
         typingAttributes = styler.theme.baseAttributes
     }
 
@@ -105,7 +108,8 @@ final class MarkdownTextView: NSTextView {
         let length = storage.length
         let blocks = currentCodeBlocks(in: storage)
         for range in Self.merged(ranges.map { Self.clamp($0, to: length) }) {
-            styler.style(storage, in: range, revealed: revealedLines, codeBlocks: blocks)
+            styler.style(
+                storage, in: range, revealed: revealedLines, checkboxes: revealedCheckboxes, codeBlocks: blocks)
         }
         typingAttributes = styler.theme.baseAttributes
     }
@@ -153,23 +157,37 @@ final class MarkdownTextView: NSTextView {
 
         let previouslyRevealed = revealedLines
         revealedLines = currentRevealedLines()
+        revealedCheckboxes = currentRevealedCheckboxes()
         restyle([dirty] + previouslyRevealed + revealedLines)
     }
 
     private func updateRevealedLines() {
         // While an edit is pending, `didChangeText` restyles the revealed lines itself.
-        guard styler.theme.hidesSyntax, dirtyRange == nil, !hasMarkedText(), textStorage != nil else { return }
+        guard dirtyRange == nil, !hasMarkedText(), textStorage != nil else { return }
         let lines = currentRevealedLines()
-        guard lines != revealedLines else { return }
+        let checkboxes = currentRevealedCheckboxes()
+        // Checkboxes give way to the caret even when syntax is never hidden.
+        let needsRestyle = (styler.theme.hidesSyntax && lines != revealedLines) || checkboxes != revealedCheckboxes
         let previous = revealedLines
         revealedLines = lines
-        restyle(previous + lines)
+        revealedCheckboxes = checkboxes
+        if needsRestyle {
+            restyle(previous + lines)
+        }
     }
 
     private func currentRevealedLines() -> [NSRange] {
         guard let storage = textStorage else { return [] }
         let text = storage.mutableString
         return selectedRanges.map { text.lineRange(for: Self.clamp($0.rangeValue, to: text.length)) }
+    }
+
+    private func currentRevealedCheckboxes() -> Set<NSRange> {
+        guard let storage = textStorage else { return [] }
+        let text = storage.mutableString
+        return MarkdownParser.checkboxes(
+            touching: selectedRanges.map { Self.clamp($0.rangeValue, to: text.length) }, in: text,
+            codeBlocks: currentCodeBlocks(in: storage))
     }
 
     // MARK: - Editing lifecycle
@@ -327,8 +345,10 @@ final class MarkdownTextView: NSTextView {
     }
 
     private func handleCheckboxClick(at point: NSPoint) -> Bool {
+        // A checkbox the caret is on is text, without the attribute, but clicking it still toggles it.
         guard isEditable, let storage = textStorage,
             let range = attributeRange(.markdownCheckbox, near: point, in: storage)
+                ?? revealedCheckboxes.first(where: { hitRect(for: $0).contains(point) })
         else { return false }
         let text = storage.mutableString
         guard let edit = MarkdownEdits.toggleCheckbox(in: text, onLineAt: range.location, selection: selectedRange())
@@ -360,11 +380,15 @@ final class MarkdownTextView: NSTextView {
                     key, at: candidate, longestEffectiveRange: &range, in: NSRange(location: 0, length: storage.length))
                     != nil
             else { continue }
-            if rect(for: range).insetBy(dx: -3, dy: -2).contains(point) {
+            if hitRect(for: range).contains(point) {
                 return range
             }
         }
         return nil
+    }
+
+    private func hitRect(for range: NSRange) -> NSRect {
+        rect(for: range).insetBy(dx: -3, dy: -2)
     }
 
     private func rect(for range: NSRange) -> NSRect {
