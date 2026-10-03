@@ -127,6 +127,49 @@ extension Moment {
         default: "D+\(-days)"
         }
     }
+
+    /// The number the list shows, to `decimals` places, rounded down so its whole part stays the
+    /// list's: a progress bar's percent, a birthday's age and how far into the year since, or a
+    /// day's count and the part of today left before it ("D-12.37500") or gone since it
+    /// ("D+34.62500"). "D-Day" has no number to refine.
+    public func preciseHeadline(
+        at now: Date, decimals: Int, calendar: Calendar = .current, locale: Locale = .current
+    ) -> String {
+        switch kind {
+        case .progress:
+            let style = FloatingPointFormatStyle<Double>.Percent(locale: locale)
+            return progress(at: now, calendar: calendar).fraction.formatted(
+                style.precision(.fractionLength(decimals)).rounded(rule: .down).grouping(.never))
+        case .life:
+            let age = age(on: now, calendar: calendar)
+            let birthday = calendar.startOfDay(for: date)
+            guard birthday < now, let last = calendar.date(byAdding: .year, value: age, to: birthday),
+                let next = calendar.date(byAdding: .year, value: age + 1, to: birthday)
+            else { return Self.decimal(Double(age), decimals, locale) }
+            let year = DateInterval(start: calendar.startOfDay(for: last), end: calendar.startOfDay(for: next))
+            return Self.decimal(Self.part(age, of: year, at: now), decimals, locale)
+        default:
+            let days = dayCount(on: now, calendar: calendar).days
+            guard days != 0, let today = calendar.dateInterval(of: .day, for: now) else { return Self.dDay(days) }
+            // Counting down, today's part is what's left of it; counting up, what's gone.
+            let value =
+                days > 0 ? Self.part(days, of: today, at: now, left: true) : Self.part(-days, of: today, at: now)
+            return (days > 0 ? "D-" : "D+") + Self.decimal(value, decimals, locale)
+        }
+    }
+
+    /// `whole` plus the part of `interval` gone (or left) at `now`, kept below `whole + 1`.
+    private static func part(_ whole: Int, of interval: DateInterval, at now: Date, left: Bool = false) -> Double {
+        let gone = interval.duration > 0 ? now.timeIntervalSince(interval.start) / interval.duration : 0
+        let part = min(max(left ? 1 - gone : gone, 0), 1)
+        return min(Double(whole) + part, Double(whole + 1).nextDown)
+    }
+
+    private static func decimal(_ value: Double, _ decimals: Int, _ locale: Locale) -> String {
+        value.formatted(
+            FloatingPointFormatStyle<Double>(locale: locale).precision(.fractionLength(decimals)).rounded(rule: .down)
+                .grouping(.never))
+    }
 }
 
 extension Calendar {

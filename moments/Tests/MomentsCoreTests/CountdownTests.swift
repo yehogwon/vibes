@@ -150,6 +150,29 @@ struct CountdownTests {
             seoul.moment(.life, on: 1995, 10, 10).summary(on: now, calendar: calendar)
                 == CountSummary(headline: "30", caption: "years old"))
     }
+
+    @Test func refinesTheHeadlineWithDecimals() {
+        let now = seoul.date(2026, 9, 28, 9)
+        func headline(_ moment: Moment, at date: Date = now, _ decimals: Int = 5) -> String {
+            moment.preciseHeadline(
+                at: date, decimals: decimals, calendar: seoul.calendar, locale: Locale(identifier: "en_US_POSIX"))
+        }
+        // 15 of today's 24 hours are left before the count drops to D-11, rounded down, not up.
+        let ahead = seoul.moment(on: 2026, 10, 10)
+        #expect(headline(ahead) == "D-12.62500")
+        #expect(headline(ahead, 2) == "D-12.62")
+        #expect(headline(ahead, 0) == "D-12")
+        // At midnight all of today is left, but the whole part stays the list's.
+        #expect(headline(ahead, at: seoul.date(2026, 9, 28)) == "D-12.99999")
+        #expect(headline(seoul.moment(on: 2026, 9, 28)) == "D-Day")
+        #expect(headline(seoul.moment(on: 2026, 8, 25)) == "D+34.37500")
+        // 353 days and 9 hours into a 365-day year of age.
+        #expect(headline(seoul.moment(.life, on: 1995, 10, 10)) == "30.96815")
+        #expect(headline(seoul.moment(.life, on: 2027, 1, 1)) == "0.00000")
+        let day = Moment(kind: .progress, date: now, span: .day, createdAt: now)
+        #expect(headline(day, at: seoul.date(2026, 9, 28, 14, 36)) == "60.83333%")
+        #expect(headline(day, at: seoul.date(2026, 9, 28, 14, 36), 0) == "60%")
+    }
 }
 
 @Suite("SpanProgress")

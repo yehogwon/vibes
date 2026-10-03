@@ -5,25 +5,45 @@ import SwiftUI
 /// so the panel can follow it.
 struct PanelView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var moments
     var onHeightChange: (CGFloat) -> Void
 
     var body: some View {
         Group {
             switch app.route {
             case .list:
-                MomentListPage()
+                MomentListPage(namespace: moments)
             case .editor(let moment, let isNew):
-                MomentEditor(moment: moment, isNew: isNew)
+                MomentEditor(moment: moment, isNew: isNew, namespace: moments)
                     .id(moment.id)
             case .settings:
                 SettingsPage()
             }
         }
         .transition(.opacity.animation(.easeInOut(duration: 0.15)))
+        // Carries a moment's row up to the top of the editor and back down, while the pages fade.
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: app.route)
         .frame(width: PanelController.width)
         .fixedSize(horizontal: false, vertical: true)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeightChange($0) }
         .frame(maxHeight: .infinity, alignment: .top)
+    }
+}
+
+/// Moves a moment from where the last page showed it to where this one does: from its row in the
+/// list to the top of the editor, and back. With Reduce Motion on, it only fades with the page.
+struct MovesBetweenPages: ViewModifier {
+    var id: UUID
+    var namespace: Namespace.ID
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if reduceMotion {
+            content
+        } else {
+            content.matchedGeometryEffect(id: id, in: namespace)
+        }
     }
 }
 

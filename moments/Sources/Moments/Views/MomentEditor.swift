@@ -4,26 +4,48 @@ import MomentsCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Adds or edits a moment. Nothing is saved until Save.
+/// Adds or edits a moment, under the moment as the list shows it. Edits to a moment are saved as
+/// they're made; a new one is added with Add.
 struct MomentEditor: View {
     @Environment(AppState.self) private var app
     @State private var draft: Moment
+    /// The moment as last saved. Only what changed since is saved next, so an edit arriving from
+    /// another Mac meanwhile survives.
+    @State private var saved: Moment
     @FocusState private var isNameFocused: Bool
     @State private var emojiTarget = EmojiTarget()
+    @State private var isAvatarHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// The moment as editing began. Only what changed since is saved, so an edit arriving from
-    /// another Mac meanwhile survives.
-    let original: Moment
     let isNew: Bool
+    /// Shared with the list, so the bar at the top moves up from the moment's row.
+    let namespace: Namespace.ID
 
-    init(moment: Moment, isNew: Bool) {
+    init(moment: Moment, isNew: Bool, namespace: Namespace.ID) {
         _draft = State(initialValue: moment)
-        original = moment
+        _saved = State(initialValue: moment)
         self.isNew = isNew
+        self.namespace = namespace
     }
 
+    /// Saves the edits since the last save, unless the moment has been deleted meanwhile.
     private func save() {
-        app.save(draft, editedFrom: isNew ? nil : original)
+        guard !isNew, draft != saved, app.store.moment(withID: draft.id) != nil else { return }
+        app.store.save(draft, from: saved)
+        saved = draft
+    }
+
+    /// Whether the edits not saved yet include typing, which is saved once it pauses rather than
+    /// at every key: the file isn't rewritten each time, and a date isn't saved half-typed.
+    private var isTyping: Bool {
+        draft.name != saved.name || draft.date != saved.date || draft.startDate != saved.startDate
+            || draft.endDate != saved.endDate
+    }
+
+    /// Edits that look half-done wait for the editor to close, rather than show in the menu bar: a
+    /// name cleared to type another, or custom dates that end before they start.
+    private var isHalfDone: Bool {
+        (draft.name.allSatisfy(\.isWhitespace) && !saved.name.allSatisfy(\.isWhitespace))
+            || (draft.kind == .progress && draft.span == .custom && draft.endDate < draft.startDate)
     }
 
     var body: some View {
@@ -35,14 +57,21 @@ struct MomentEditor: View {
                 }
                 .buttonStyle(.borderless)
                 .padding(.leading, -4)
-                .help("Back without saving (Esc)")
+                .help(isNew ? "Back without adding (Esc)" : "Back to the list (Esc)")
             } trailing: {
-                Button("Save", action: save)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .help("Save (⌘↩)")
+                if isNew {
+                    Button("Add") { app.add(draft) }
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .help("Add to the list (⌘↩)")
+                }
             }
+            MomentRow(moment: draft, now: app.now, isFocused: true) { avatarButton }
+                .modifier(MovesBetweenPages(id: draft.id, namespace: namespace))
+                .padding(.horizontal, 8)
+                // With the row's own inset, 16 pt to the fields.
+                .padding(.bottom, 10)
             if isNew {
                 kindPicker
                     .padding(.horizontal, 16)
@@ -60,6 +89,15 @@ struct MomentEditor: View {
                     .padding(.vertical, 10)
             }
         }
+        .task(id: draft) {
+            if isTyping {
+                try? await Task.sleep(for: .seconds(1))
+            }
+            guard !Task.isCancelled, !isHalfDone else { return }
+            save()
+        }
+        // Leaving the editor saves whatever's left, half-done or not.
+        .onAppear { app.saveEditor = save }
     }
 
     private var kindName: String {
@@ -103,14 +141,13 @@ struct MomentEditor: View {
                 TextField(namePlaceholder, text: $draft.name)
                     .textFieldStyle(.roundedBorder)
                     .focused($isNameFocused)
-                    .onSubmit(save)
+                    .onSubmit { isNew ? app.add(draft) : save() }
                     .onAppear {
                         if isNew {
                             isNameFocused = true
                         }
                     }
             }
-            row("Icon") { iconPicker }
             row("Color") { swatches }
             switch draft.kind {
             case .progress:
@@ -196,54 +233,45 @@ struct MomentEditor: View {
 
     // MARK: - Icon
 
-    private var iconPicker: some View {
-        HStack(spacing: 8) {
-            Button(action: emojiTarget.pick) {
-                Text(draft.emoji.isEmpty ? "Emoji…" : draft.emoji)
+    /// The bar's picture. A click picks an emoji; a right-click also offers a photo, or clearing
+    /// both for the kind's own symbol.
+    private var avatarButton: some View {
+        Button(action: emojiTarget.pick) {
+            AvatarView(moment: draft, now: app.now)
+                // A ring under the pointer, since nothing else says the picture is a button.
+                .overlay(Circle().strokeBorder(Color.primary.opacity(isAvatarHovered ? 0.3 : 0), lineWidth: 1.5))
+                .onHover { isAvatarHovered = $0 }
+                .animation(.easeOut(duration: 0.12), value: isAvatarHovered)
+        }
+        .buttonStyle(.plain)
+        .background {
+            EmojiReceiver(target: emojiTarget) { emoji in
+                draft.emoji = emoji
+                // A photo wins over the emoji in `AvatarView`, so it would hide the one picked.
+                if !emoji.isEmpty {
+                    draft.imageData = nil
+                }
             }
-            .background {
-                EmojiReceiver(target: emojiTarget) { draft.emoji = $0 }
-                    .frame(width: 1, height: 1)
-                    .accessibilityHidden(true)
-                    .onDisappear(perform: emojiTarget.close)
-            }
-            .onGeometryChange(for: CGSize.self) { $0.size } action: { emojiTarget.buttonSize = $0 }
-            .accessibilityLabel("Emoji")
-            .accessibilityValue(draft.emoji)
-            .help("Pick from Emoji & Symbols")
-            Button("Photo…", action: choosePhoto)
+            .frame(width: 1, height: 1)
+            .accessibilityHidden(true)
+            .onDisappear(perform: emojiTarget.close)
+        }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { emojiTarget.buttonSize = $0 }
+        .contextMenu {
+            Button("Choose Emoji…", action: emojiTarget.pick)
+            Button("Choose Photo…", action: choosePhoto)
             if draft.imageData != nil || !draft.emoji.isEmpty {
-                removePictureButton
+                Divider()
+                Button("Clear Icon") {
+                    draft.emoji = ""
+                    draft.imageData = nil
+                }
             }
         }
-        // As tall as the remove button, so the rows below stay put as it comes and goes.
-        .frame(minHeight: 24)
-    }
-
-    /// Removes the picture the icon shows: the photo, which wins over the emoji as in
-    /// `AvatarView`, or else the emoji. It's one button for both, so it keeps keyboard focus
-    /// when removing the photo leaves the emoji to remove.
-    private var removePictureButton: some View {
-        let isPhoto = draft.imageData != nil
-        return removeButton(
-            isPhoto ? "Remove Photo" : "Remove Emoji",
-            help: isPhoto ? "Use the emoji or symbol instead" : "Use the symbol instead"
-        ) {
-            if isPhoto {
-                draft.imageData = nil
-            } else {
-                draft.emoji = ""
-            }
-        }
-    }
-
-    private func removeButton(_ title: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            IconLabel(title: title, systemImage: "xmark.circle.fill")
-        }
-        .buttonStyle(.borderless)
-        .foregroundStyle(.secondary)
-        .help(help)
+        .accessibilityLabel("Icon")
+        .accessibilityValue(draft.imageData != nil ? "Photo" : draft.emoji)
+        .accessibilityAction(named: "Choose Photo", choosePhoto)
+        .help("Choose an emoji, or Control-click for a photo")
     }
 
     private func choosePhoto() {
