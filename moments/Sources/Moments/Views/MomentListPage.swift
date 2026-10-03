@@ -5,6 +5,8 @@ import SwiftUI
 /// The list of moments, in the order they were arranged.
 struct MomentListPage: View {
     @Environment(AppState.self) private var app
+    /// Shared with the editor, so a row moves up to its top when it's opened.
+    let namespace: Namespace.ID
     /// The list's natural height, so the scroll view can be exactly as tall as its rows up to a
     /// limit, and the panel only as tall as it needs to be.
     @State private var listHeight: CGFloat = 0
@@ -46,6 +48,7 @@ struct MomentListPage: View {
                 ForEach(app.store.moments) { moment in
                     let isLifted = drag?.id == moment.id
                     MomentRow(moment: moment, now: app.now)
+                        .modifier(MovesBetweenPages(id: moment.id, namespace: namespace))
                         .background {
                             // Lifted, the row sits above the ones it passes.
                             RoundedRectangle(cornerRadius: 10)

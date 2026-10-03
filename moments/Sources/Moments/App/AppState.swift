@@ -14,7 +14,15 @@ final class AppState {
 
     let store: MomentStore
     /// What the panel shows.
-    var route = Route.list
+    var route = Route.list {
+        // Before the editor fades out, not after: the list shows the moment as edited from the
+        // start, as its row moves back into place.
+        willSet {
+            if case .editor = route, newValue != route {
+                saveEditor()
+            }
+        }
+    }
     /// The time the list counts from. Moves every half minute and whenever the day, the clock,
     /// or the time zone changes.
     private(set) var now = Date.now
@@ -30,6 +38,8 @@ final class AppState {
     @ObservationIgnored var lowerPanel: (Bool) -> Void = { _ in }
     /// Called when the moments or the day change, to update menu bar items and reminders.
     @ObservationIgnored var momentsDidChange: () -> Void = {}
+    /// Set by the editor showing: saves the edits it hasn't yet.
+    @ObservationIgnored var saveEditor: () -> Void = {}
 
     @ObservationIgnored private let reminders = Reminders()
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -85,10 +95,8 @@ final class AppState {
         route = .editor(store.moment(withID: moment.id) ?? moment, isNew: false)
     }
 
-    /// - Parameter original: The moment as editing began, so a change that arrived from another
-    ///   Mac while editing isn't undone.
-    func save(_ moment: Moment, editedFrom original: Moment?) {
-        store.save(moment, from: original)
+    func add(_ moment: Moment) {
+        store.save(moment)
         route = .list
     }
 

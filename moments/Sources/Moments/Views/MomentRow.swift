@@ -1,15 +1,19 @@
 import MomentsCore
 import SwiftUI
 
-/// One moment in the list: a countdown, an age, or a progress bar.
-struct MomentRow: View {
+/// One moment in the list: a countdown, an age, or a progress bar. The editor shows it at its top
+/// too, focused: with an avatar of its own, and the number to as many decimals as fit.
+struct MomentRow<Avatar: View>: View {
     let moment: Moment
     let now: Date
+    var isFocused = false
+    @ViewBuilder var avatar: Avatar
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 10) {
-            AvatarView(moment: moment, now: now)
+            avatar
             if moment.kind == .progress {
                 progressBody(moment.progress(at: now))
             } else {
@@ -20,7 +24,7 @@ struct MomentRow: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.primary.opacity(isHovered ? 0.07 : 0))
+                .fill(Color.primary.opacity(isHovered && !isFocused ? 0.07 : 0))
         )
         .contentShape(RoundedRectangle(cornerRadius: 10))
         .onHover { isHovered = $0 }
@@ -41,7 +45,7 @@ struct MomentRow: View {
             }
             Spacer(minLength: 4)
             VStack(alignment: .trailing, spacing: 0) {
-                Text(summary.headline)
+                headline(summary.headline)
                     .font(.system(.title2, design: .rounded, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(moment.ink)
@@ -86,7 +90,7 @@ struct MomentRow: View {
                     .font(.body.weight(.medium))
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                Text(progress.percent)
+                headline(progress.percent)
                     .font(.system(.body, design: .rounded, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(moment.ink)
@@ -97,6 +101,30 @@ struct MomentRow: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// The list's number; focused, the same to as many decimals as fit, up to 5, moving with the
+    /// clock. Its last digits can change faster than the eye follows, so it redraws at most
+    /// 20 times a second, or once a second with Reduce Motion on.
+    @ViewBuilder
+    private func headline(_ text: String) -> some View {
+        if isFocused {
+            TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 0.05)) { context in
+                ViewThatFits(in: .horizontal) {
+                    ForEach([5, 4, 3, 2, 1, 0], id: \.self) { decimals in
+                        Text(moment.preciseHeadline(at: context.date, decimals: decimals))
+                    }
+                }
+            }
+        } else {
+            Text(text)
+        }
+    }
+}
+
+extension MomentRow where Avatar == AvatarView {
+    init(moment: Moment, now: Date) {
+        self.init(moment: moment, now: now) { AvatarView(moment: moment, now: now) }
     }
 }
 
