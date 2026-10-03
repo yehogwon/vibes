@@ -3,7 +3,7 @@ import AppKit
 /// Attributes the styler sets for `MarkdownLayoutFragment` to draw. Values are plain `NSNumber` or
 /// `String` so attribute runs compare cheaply.
 extension NSAttributedString.Key {
-    /// `Bool`: whether the task is checked. Set on the `[ ]` characters.
+    /// `Bool`: whether the task is checked. Set on the `[ ]` characters, unless the caret is on them.
     static let markdownCheckbox = NSAttributedString.Key("Jots.checkbox")
     /// `Int`: nesting level. Set on the `-`, `*`, or `+` of a bullet.
     static let markdownBullet = NSAttributedString.Key("Jots.bullet")

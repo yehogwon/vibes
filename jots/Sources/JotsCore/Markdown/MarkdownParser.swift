@@ -110,6 +110,23 @@ public enum MarkdownParser {
         return Patterns.rule.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) != nil
     }
 
+    /// The checkboxes (`[ ]` or `[x]`) that an end of a selection is on, from just before the `[`
+    /// through just after the `]`. The editor shows these as text, so the caret never sits on top
+    /// of a drawn box.
+    public static func checkboxes(
+        touching selections: [NSRange], in text: NSString, codeBlocks: [NSRange]? = nil
+    ) -> Set<NSRange> {
+        var result = Set<NSRange>()
+        for end in selections.flatMap({ [$0.location, NSMaxRange($0)] }) {
+            for span in parse(text, in: NSRange(location: end, length: 0), codeBlocks: codeBlocks).spans {
+                if case .checkbox = span.kind, span.range.location <= end, end <= NSMaxRange(span.range) {
+                    result.insert(span.range)
+                }
+            }
+        }
+        return result
+    }
+
     private static func parseCodeLine(_ line: Line, in block: NSRange, text: NSString, into spans: inout [MarkdownSpan])
     {
         let isFirst = line.start == block.location
