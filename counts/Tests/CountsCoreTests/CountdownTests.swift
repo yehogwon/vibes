@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import CounterCore
+@testable import CountsCore
 
 /// Seconds after a fixed start, to keep the arithmetic readable.
 func at(_ seconds: TimeInterval) -> Date {

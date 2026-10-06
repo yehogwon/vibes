@@ -1,4 +1,4 @@
-import CounterCore
+import CountsCore
 import SwiftUI
 
 /// Sets a duration and starts a timer. With no timers, it's what the panel shows.

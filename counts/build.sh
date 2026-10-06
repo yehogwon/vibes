@@ -1,8 +1,8 @@
 #!/bin/bash
-# Builds Counter.app from the SwiftPM package. Xcode has to be installed (the Command Line Tools
+# Builds Counts.app from the SwiftPM package. Xcode has to be installed (the Command Line Tools
 # lack SwiftUI's macro plugin), but it never opens.
 #
-#   ./build.sh           build a release Counter.app (Apple silicon and Intel) into build/
+#   ./build.sh           build a release Counts.app (Apple silicon and Intel) into build/
 #   ./build.sh debug     build a debug copy instead
 #   ./build.sh run       build a debug copy and open it (it appears in the menu bar)
 #   ./build.sh install   build a release copy into ~/Applications and open it
@@ -10,13 +10,13 @@
 # Run the tests with `swift test`.
 #
 # To try syncing without touching iCloud Drive, point a copy at other folders:
-#   open -n build/Counter.app --args -CounterSyncFolder /tmp/cloud -CounterLocalFolder /tmp/mac-a
+#   open -n build/Counts.app --args -CountsSyncFolder /tmp/cloud -CountsLocalFolder /tmp/mac-a
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-APP="$ROOT/build/Counter.app"
+APP="$ROOT/build/Counts.app"
 ICON="$ROOT/build/AppIcon.icns"
-INSTALLED="$HOME/Applications/Counter.app"
+INSTALLED="$HOME/Applications/Counts.app"
 ACTION="${1:-release}"
 
 case "$ACTION" in
@@ -30,7 +30,7 @@ esac
 
 cd "$ROOT"
 
-# The oldest macOS Counter runs on. Package.swift has to agree, since the compiler checks what the
+# The oldest macOS Counts runs on. Package.swift has to agree, since the compiler checks what the
 # code calls against its deployment target.
 MIN_MACOS="$(plutil -extract LSMinimumSystemVersion raw Resources/Info.plist)"
 PACKAGE_MIN_MACOS="$(swift package dump-package | plutil -extract platforms.0.version raw -o - -)"
@@ -40,7 +40,7 @@ if [ "$PACKAGE_MIN_MACOS" != "$MIN_MACOS" ]; then
 fi
 SDK="$(xcrun --show-sdk-version)"
 
-BUILD=(-c "$CONFIG" --product Counter)
+BUILD=(-c "$CONFIG" --product Counts)
 # Release builds also run on Intel Macs.
 if [ "$CONFIG" = release ]; then
   BUILD+=(--arch arm64 --arch x86_64)
@@ -48,7 +48,7 @@ fi
 
 echo "==> Compiling ($CONFIG)"
 swift build "${BUILD[@]}"
-BIN="$(swift build "${BUILD[@]}" --show-bin-path)/Counter"
+BIN="$(swift build "${BUILD[@]}" --show-bin-path)/Counts"
 
 # The icon only changes when its script does, so it's drawn again only then.
 if [ Tools/MakeIcon.swift -nt "$ICON" ]; then
@@ -64,7 +64,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # app in compatibility mode, without its current look. So the real SDK version is written in here.
 # (Passing it to the linker instead breaks with some SwiftPM versions, which hand -Xlinker flags to
 # clang as they are.)
-vtool -set-build-version macos "$MIN_MACOS" "$SDK" -replace -output "$APP/Contents/MacOS/Counter" "$BIN"
+vtool -set-build-version macos "$MIN_MACOS" "$SDK" -replace -output "$APP/Contents/MacOS/Counts" "$BIN"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
@@ -72,30 +72,30 @@ cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
 # Every slice has to say what was asked for above, or the app would refuse to open on older macOS,
 # or look dated on newer.
 echo "==> Checking the binary"
-MINOS="$(vtool -show-build "$APP/Contents/MacOS/Counter" | awk '$1 == "minos" { print $2 }' | sort -u)"
-BUILT_SDK="$(vtool -show-build "$APP/Contents/MacOS/Counter" | awk '$1 == "sdk" { print $2 }' | sort -u)"
+MINOS="$(vtool -show-build "$APP/Contents/MacOS/Counts" | awk '$1 == "minos" { print $2 }' | sort -u)"
+BUILT_SDK="$(vtool -show-build "$APP/Contents/MacOS/Counts" | awk '$1 == "sdk" { print $2 }' | sort -u)"
 if [ "$MINOS" != "$MIN_MACOS" ] || [ "$BUILT_SDK" != "$SDK" ]; then
-  echo "Counter is built for macOS $MINOS with SDK $BUILT_SDK, not macOS $MIN_MACOS with SDK $SDK." >&2
+  echo "Counts is built for macOS $MINOS with SDK $BUILT_SDK, not macOS $MIN_MACOS with SDK $SDK." >&2
   exit 1
 fi
-echo "    $(lipo -archs "$APP/Contents/MacOS/Counter"), macOS $MINOS and later, SDK $BUILT_SDK"
+echo "    $(lipo -archs "$APP/Contents/MacOS/Counts"), macOS $MINOS and later, SDK $BUILT_SDK"
 
 echo "==> Signing (ad hoc)"
 codesign --force --sign - "$APP"
 
 # Quit a running copy and wait for it to exit, or `open` can fail while it's still shutting down.
-quit_counter() {
-  pkill -x Counter || true
-  while pgrep -x Counter >/dev/null; do sleep 0.1; done
+quit_counts() {
+  pkill -x Counts || true
+  while pgrep -x Counts >/dev/null; do sleep 0.1; done
 }
 
 case "$ACTION" in
   run)
-    quit_counter
+    quit_counts
     open "$APP"
     ;;
   install)
-    quit_counter
+    quit_counts
     mkdir -p "$(dirname "$INSTALLED")"
     rm -rf "$INSTALLED"
     ditto "$APP" "$INSTALLED"

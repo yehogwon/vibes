@@ -1,4 +1,4 @@
-import CounterCore
+import CountsCore
 import Foundation
 import UserNotifications
 
@@ -44,7 +44,7 @@ final class Alerts: NSObject, UNUserNotificationCenterDelegate {
         scheduled = ids
     }
 
-    /// Shows the alert even while Counter's panel is in front.
+    /// Shows the alert even while the panel is in front.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {

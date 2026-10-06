@@ -122,17 +122,17 @@ jobs:
       - name: Lint the scripts
         run: shellcheck ./*/*.sh .github/scripts/*.sh
 
-  counter:
-    name: Counter
+  counts:
+    name: Counts
     needs: changes
-    if: contains(fromJSON(needs.changes.outputs.apps), 'counter')
+    if: contains(fromJSON(needs.changes.outputs.apps), 'counts')
     uses: ./.github/workflows/app.yml
     with:
-      app: counter
-      build: ${{ contains(fromJSON(needs.changes.outputs.build), 'counter') }}
-      cask: ${{ contains(fromJSON(needs.changes.outputs.cask), 'counter') }}
+      app: counts
+      build: ${{ contains(fromJSON(needs.changes.outputs.build), 'counts') }}
+      cask: ${{ contains(fromJSON(needs.changes.outputs.cask), 'counts') }}
       # Kept to folders of its own, and made to sync through one.
-      open-args: -CounterSyncFolder cloud -CounterLocalFolder local
+      open-args: -CountsSyncFolder cloud -CountsLocalFolder local
 
   jots:
     name: Jots
@@ -158,7 +158,7 @@ jobs:
 
   ci:
     name: CI
-    needs: [changes, lint, counter, jots, moments]
+    needs: [changes, lint, counts, jots, moments]
     # Also when a job fails or is cancelled, since a required check that's skipped counts as passed.
     if: always()
     runs-on: ubuntu-latest

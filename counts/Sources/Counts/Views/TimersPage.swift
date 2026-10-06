@@ -1,4 +1,4 @@
-import CounterCore
+import CountsCore
 import SwiftUI
 
 /// The timers, the one that ends first at the top. A lone timer shows larger.

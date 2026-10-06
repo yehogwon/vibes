@@ -1,4 +1,4 @@
-import CounterCore
+import CountsCore
 import SwiftUI
 
 /// Everything the panel shows: the timers, the new timer page, or settings. It reports its

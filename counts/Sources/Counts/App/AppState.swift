@@ -1,5 +1,5 @@
 import AppKit
-import CounterCore
+import CountsCore
 import Observation
 
 /// App-wide state: the timers, the clock they count by, and what the panel shows.
@@ -35,11 +35,11 @@ final class AppState {
 
     init() {
         let defaults = UserDefaults.standard
-        // For trying sync with a second copy: `-CounterLocalFolder <path>` keeps this copy's
+        // For trying sync with a second copy: `-CountsLocalFolder <path>` keeps this copy's
         // timers elsewhere.
         let localFolder =
             defaults.string(forKey: SettingsKey.localFolder).map { URL(fileURLWithPath: $0, isDirectory: true) }
-            ?? URL.applicationSupportDirectory.appendingPathComponent("Counter", isDirectory: true)
+            ?? Self.renamed(URL.applicationSupportDirectory.appendingPathComponent("Counts", isDirectory: true))
         store = TimerStore(libraryURL: localFolder.appendingPathComponent("Library.json"))
         opensOnHover = defaults.object(forKey: SettingsKey.opensOnHover) as? Bool ?? true
     }
@@ -114,7 +114,7 @@ final class AppState {
     nonisolated private static let iCloudDrive = URL.homeDirectory.appendingPathComponent(
         "Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true)
 
-    /// A Counter folder in iCloud Drive. Writing straight into iCloud Drive needs no iCloud
+    /// A Counts folder in iCloud Drive. Writing straight into iCloud Drive needs no iCloud
     /// entitlement, so an ad hoc signed build syncs.
     nonisolated private static func iCloudFolder() -> URL? {
         if let override = UserDefaults.standard.string(forKey: SettingsKey.syncFolder) {
@@ -123,7 +123,17 @@ final class AppState {
         guard FileManager.default.ubiquityIdentityToken != nil,
             FileManager.default.fileExists(atPath: iCloudDrive.path)
         else { return nil }
-        return iCloudDrive.appendingPathComponent("Counter", isDirectory: true)
+        return renamed(iCloudDrive.appendingPathComponent("Counts", isDirectory: true))
+    }
+
+    /// Counts was called Counter, so a Counter folder beside `folder` moves over the first time.
+    // ponytail: one-time move, drop it once no Counter installs are left.
+    nonisolated private static func renamed(_ folder: URL) -> URL {
+        let old = folder.deletingLastPathComponent().appendingPathComponent("Counter", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: folder.path) {
+            try? FileManager.default.moveItem(at: old, to: folder)
+        }
+        return folder
     }
 
     private func resolveSyncFolder() {
@@ -180,6 +190,6 @@ final class AppState {
 enum SettingsKey {
     static let opensOnHover = "OpensOnHover"
     static let customDuration = "CustomDuration"
-    static let syncFolder = "CounterSyncFolder"
-    static let localFolder = "CounterLocalFolder"
+    static let syncFolder = "CountsSyncFolder"
+    static let localFolder = "CountsLocalFolder"
 }
