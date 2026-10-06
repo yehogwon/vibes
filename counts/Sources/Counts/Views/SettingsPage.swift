@@ -1,8 +1,8 @@
-import CounterCore
+import CountsCore
 import ServiceManagement
 import SwiftUI
 
-/// Settings live in the panel too; Counter has no windows of its own.
+/// Settings live in the panel too; Counts has no windows of its own.
 struct SettingsPage: View {
     @Environment(AppState.self) private var app
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
@@ -18,7 +18,7 @@ struct SettingsPage: View {
             }
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Show timers when the pointer rests on the menu bar item", isOn: $app.opensOnHover)
-                Toggle("Open Counter at login", isOn: $opensAtLogin)
+                Toggle("Open Counts at login", isOn: $opensAtLogin)
                     .onChange(of: opensAtLogin) { _, enabled in updateLoginItem(enabled) }
                 if let loginItemMessage {
                     HStack {
@@ -54,7 +54,7 @@ struct SettingsPage: View {
                 }
                 Divider()
                     .padding(.vertical, 2)
-                Button("Quit Counter") { NSApp.terminate(nil) }
+                Button("Quit Counts") { NSApp.terminate(nil) }
             }
             .toggleStyle(.checkbox)
             .font(.callout)
@@ -83,6 +83,6 @@ struct SettingsPage: View {
         let status = SMAppService.mainApp.status
         opensAtLogin = status == .enabled || status == .requiresApproval
         loginItemMessage =
-            status == .requiresApproval ? "Allow Counter in System Settings to finish turning this on." : nil
+            status == .requiresApproval ? "Allow Counts in System Settings to finish turning this on." : nil
     }
 }

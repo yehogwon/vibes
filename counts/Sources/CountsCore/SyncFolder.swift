@@ -10,7 +10,7 @@ public final class SyncFolder: Sendable {
 
     var fileURL: URL { url.appendingPathComponent(TimerFile.name) }
 
-    private let queue = DispatchQueue(label: "Counter sync folder")
+    private let queue = DispatchQueue(label: "Counts sync folder")
 
     public init(url: URL) {
         self.url = url
@@ -91,7 +91,7 @@ public final class SyncFolder: Sendable {
                 return Result(
                     list: list,
                     status: .failed(
-                        "\(TimerFile.name) is in a format this version of Counter doesn't know, so it was left alone."))
+                        "\(TimerFile.name) is in a format this version of Counts doesn't know, so it was left alone."))
             } catch {
                 notices.append(try setAside(data, now: now))
                 rewrite = true
@@ -203,7 +203,7 @@ public final class FolderPresenter: NSObject, NSFilePresenter, Sendable {
         self.onChange = onChange
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 1
-        queue.name = "Counter folder presenter"
+        queue.name = "Counts folder presenter"
         presentedItemOperationQueue = queue
     }
 

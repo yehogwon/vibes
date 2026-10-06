@@ -28,4 +28,6 @@ done
 # The casks clear quarantine in a postflight block, which Cask/InstallSteps rejects; each cask
 # explains why it can't be postflight_steps.
 brew style --except-cops Cask/InstallSteps "${CASKS[@]}"
-brew audit --cask --strict "${CASKS[@]}"
+# A cask may share its token with a homebrew/core formula. That only clashes in homebrew/cask, and
+# these are installed as yehogwon/vibes/<cask>.
+brew audit --cask --strict --except token_conflicts "${CASKS[@]}"

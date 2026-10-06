@@ -28,7 +28,7 @@ on:
         type: choice
         # Each app with a cask.sh, which ci.yml checks.
         options:
-          - counter
+          - counts
           - jots
           - moments
       bump:
@@ -267,6 +267,11 @@ jobs:
           sha256="$(shasum -a 256 "$RUNNER_TEMP/$zip" | cut -d ' ' -f 1)"
           mkdir -p tap/Casks
           "$APP/cask.sh" "$VERSION" "$sha256" > "tap/Casks/$APP.rb"
+
+          # An app that was renamed or removed here loses its cask in the tap too.
+          for cask in tap/Casks/*.rb; do
+            [ -f "$(basename "$cask" .rb)/cask.sh" ] || rm "$cask"
+          done
 
           {
             echo '# yehogwon/vibes'

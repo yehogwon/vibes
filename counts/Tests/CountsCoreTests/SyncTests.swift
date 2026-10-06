@@ -1,12 +1,12 @@
 import Foundation
 import Testing
 
-@testable import CounterCore
+@testable import CountsCore
 
 /// Two Macs, each with its own library, sharing a sync folder the way iCloud Drive would share it.
 @MainActor
 final class TwoMacs {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("CounterCoreTests-\(UUID().uuidString)")
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("CountsCoreTests-\(UUID().uuidString)")
     let a: TimerStore
     let b: TimerStore
     var cloud: URL { directory.appendingPathComponent("Cloud") }

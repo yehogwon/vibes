@@ -8,13 +8,13 @@ enum MainMenu {
         let main = NSMenu()
         main.addItem(
             submenu(
-                "Counter",
+                "Counts",
                 [
-                    item("About Counter", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+                    item("About Counts", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
                     .separator(),
                     item("Settings…", #selector(AppDelegate.showSettings(_:)), ","),
                     .separator(),
-                    item("Quit Counter", #selector(NSApplication.terminate(_:)), "q"),
+                    item("Quit Counts", #selector(NSApplication.terminate(_:)), "q"),
                 ]))
         main.addItem(
             submenu(
