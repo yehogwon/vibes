@@ -268,12 +268,10 @@ jobs:
           mkdir -p tap/Casks
           "$APP/cask.sh" "$VERSION" "$sha256" > "tap/Casks/$APP.rb"
 
-          # A renamed app (.github/cask_renames.json, old cask to new) drops its old cask once the
-          # new one is out, and the tap's cask_renames.json has brew move what was installed over.
-          casks="$(for cask in tap/Casks/*.rb; do basename "$cask" .rb; done | jq -Rnc '[inputs]')"
-          jq --argjson casks "$casks" 'with_entries(select(.value | IN($casks[])))' \
-            .github/cask_renames.json > tap/cask_renames.json
-          jq -r 'keys[]' tap/cask_renames.json | while read -r old; do rm -f "tap/Casks/$old.rb"; done
+          # An app that was renamed or removed here loses its cask in the tap too.
+          for cask in tap/Casks/*.rb; do
+            [ -f "$(basename "$cask" .rb)/cask.sh" ] || rm "$cask"
+          done
 
           {
             echo '# yehogwon/vibes'
