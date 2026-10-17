@@ -6,10 +6,10 @@ import SwiftUI
 ///
 /// Each color comes in two strengths: the color itself (the *fill*), for swatches and washes, and
 /// an *ink* for what has to be read against the panel, such as counts, symbols, labels, and bars.
-enum Palette {
+public enum Palette {
     /// The choices in the editor: the default, then the system colors in their dark variants,
     /// which is what the original app stores.
-    static let swatches = [
+    public static let swatches = [
         "", "FF453A", "FF9F0A", "FFD60A", "32D74B", "63E6E2", "64D2FF", "0A84FF", "5E5CE6", "BF5AF2", "FF375F",
         "AC8E68",
     ]
@@ -24,13 +24,13 @@ enum Palette {
     ]
 
     /// What the color is called, for tooltips and VoiceOver.
-    static func name(hex: String) -> String {
+    public static func name(hex: String) -> String {
         let key = normalized(hex)
         if key.isEmpty { return "Accent Color" }
         return systemColors[key]?.name ?? "#\(key)"
     }
 
-    static func color(hex: String) -> Color {
+    public static func color(hex: String) -> Color {
         Color(nsColor: nsColor(hex: hex))
     }
 
@@ -103,21 +103,27 @@ enum Palette {
 
 extension Moment {
     /// The moment's color, for washes behind its symbol and bar.
-    var tint: Color { Palette.color(hex: colorHex) }
+    public var tint: Color { Palette.color(hex: colorHex) }
     /// The moment's color where it has to be read: its count, symbol, label, and bar.
-    var ink: Color { Palette.ink(hex: colorHex) }
+    public var ink: Color { Palette.ink(hex: colorHex) }
 }
 
 /// A moment's picture: its photo, its emoji, or a symbol for its kind, in a circle. A progress bar
 /// names its span there instead, like Oct or Q4, since the row beside it already shows how far
 /// along it is.
-struct AvatarView: View {
+public struct AvatarView: View {
     let moment: Moment
     /// When it's shown, which decides a progress bar's span.
     var now = Date.now
     var size: CGFloat = 30
 
-    var body: some View {
+    public init(moment: Moment, now: Date = .now, size: CGFloat = 30) {
+        self.moment = moment
+        self.now = now
+        self.size = size
+    }
+
+    public var body: some View {
         ZStack {
             if let image = PhotoCache.image(for: moment.imageData) {
                 Image(nsImage: image)
@@ -162,10 +168,10 @@ struct AvatarView: View {
 
 /// Decoded photos, so the list doesn't decode PNGs every time it redraws.
 @MainActor
-enum PhotoCache {
+public enum PhotoCache {
     private static var images: [Data: NSImage] = [:]
 
-    static func image(for data: Data?) -> NSImage? {
+    public static func image(for data: Data?) -> NSImage? {
         guard let data else { return nil }
         if let image = images[data] {
             return image
@@ -179,7 +185,7 @@ enum PhotoCache {
     }
 
     /// A square PNG of the middle of `image`, small enough to sync comfortably.
-    static func thumbnail(of image: NSImage, side: CGFloat = 160) -> Data? {
+    public static func thumbnail(of image: NSImage, side: CGFloat = 160) -> Data? {
         guard
             let rep = NSBitmapImageRep(
                 bitmapDataPlanes: nil, pixelsWide: Int(side), pixelsHigh: Int(side), bitsPerSample: 8,

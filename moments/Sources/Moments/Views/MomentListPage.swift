@@ -1,5 +1,6 @@
 import AppKit
 import MomentsCore
+import MomentsUI
 import SwiftUI
 
 /// The list of moments, in the order they were arranged.

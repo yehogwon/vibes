@@ -119,6 +119,38 @@ extension Moment {
         }
     }
 
+    /// What a date or birthday says under its name: the day it counts to and how it repeats
+    /// ("Sat, Oct 31, 2026 · Every year"), or the age a birthday brings ("Turns 30 in 12 days").
+    public func subtitle(on now: Date) -> String {
+        let count = dayCount(on: now)
+        if kind == .life {
+            let turning = count.occurrence ?? 0
+            return switch count.days {
+            case 0: "Turns \(turning) today 🎉"
+            case 1: "Turns \(turning) tomorrow"
+            default: "Turns \(turning) in \(count.days) days"
+            }
+        }
+        var parts = [count.target.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().year())]
+        switch repeatCycle.step?.component {
+        case .day?: parts.append("Every week")
+        case .month?: parts.append("Every month")
+        case .year?: parts.append("Every year")
+        default: break
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// When a widget showing moments redraws, from `now` on: each quarter hour for the next two
+    /// hours. That takes in midnight, when every count moves on, and keeps progress bars moving
+    /// through the day.
+    public static func widgetDates(from now: Date, calendar: Calendar = .current) -> [Date] {
+        let hour = calendar.dateInterval(of: .hour, for: now)?.start ?? now
+        // Three hours of them from the top of this one, which covers two hours from any minute.
+        let quarters = (1...12).map { hour.addingTimeInterval(Double($0) * 15 * 60) }
+        return [now] + quarters.filter { $0 > now && $0 <= now.addingTimeInterval(2 * 60 * 60) }
+    }
+
     /// "D-12" twelve days before, "D-Day" on the day, "D+34" thirty-four days after.
     public static func dDay(_ days: Int) -> String {
         switch days {

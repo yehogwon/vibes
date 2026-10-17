@@ -29,6 +29,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.start()
     }
 
+    /// Opening Moments again, from a widget or the Finder, shows the list.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openPanel()
+        return false
+    }
+
     private func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(withTitle: "New D-Day…", action: #selector(newDate(_:)), keyEquivalent: "")
