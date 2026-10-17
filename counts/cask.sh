@@ -43,6 +43,7 @@ cask "counts" do
   # Mac.
   zap trash: [
     "~/Library/Application Support/Counts",
+    "~/Library/Containers/io.github.yehogwon.Counts.Widgets",
     "~/Library/Preferences/io.github.yehogwon.Counts.plist",
   ]
 

@@ -60,6 +60,23 @@ struct CountdownTests {
         let b = Countdown(id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!, duration: 60, endsAt: at(60))
         #expect(TimerList(timers: [b, a]).sorted == [a, b])
     }
+
+    @Test func widgetRedrawsEachMinuteAndAsEachEndsForHalfAnHour() {
+        let short = Countdown(duration: 90, endsAt: at(90))
+        let long = Countdown(duration: 7200, endsAt: at(7200))
+        let schedule = Countdown.widgetSchedule(for: [short, long], from: at(0))
+        #expect(schedule.dates == [at(0), at(60), at(90)] + (2...30).map { at(Double($0) * 60) })
+        #expect(schedule.next == at(1800))
+    }
+
+    @Test func widgetStopsOnceEveryTimerHasEnded() {
+        let timer = Countdown(duration: 150, endsAt: at(150))
+        let schedule = Countdown.widgetSchedule(for: [timer], from: at(0))
+        #expect(schedule.dates == [at(0), at(60), at(120), at(150)])
+        #expect(schedule.next == nil)
+        #expect(Countdown.widgetSchedule(for: [timer], from: at(200)) == ([at(200)], nil))
+        #expect(Countdown.widgetSchedule(for: [], from: at(0)) == ([at(0)], nil))
+    }
 }
 
 @Suite("TimerFile")

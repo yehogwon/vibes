@@ -94,10 +94,7 @@ struct TimerRow: View {
 
     /// "25 min · Ends 3:45 PM", with the day when it isn't today.
     private var caption: String {
-        let time = timer.endsAt.formatted(
-            Calendar.current.isDate(timer.endsAt, inSameDayAs: now)
-                ? .dateTime.hour().minute() : .dateTime.weekday(.abbreviated).hour().minute())
-        return "\(timer.durationText) · \(timer.hasEnded(at: now) ? "Ended" : "Ends") \(time)"
+        "\(timer.durationText) · \(timer.endText(at: now))"
     }
 
     /// "4 minutes, 59 seconds left", since VoiceOver would read "4:59" as a time of day.

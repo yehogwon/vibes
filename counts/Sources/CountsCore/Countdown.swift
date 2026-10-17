@@ -55,6 +55,14 @@ public struct Countdown: Identifiable, Hashable, Codable, Sendable {
         Self.durationText(duration)
     }
 
+    /// "Ends 3:45 PM", or "Ended" once it has, with the day when it isn't today.
+    public func endText(at now: Date) -> String {
+        let time = endsAt.formatted(
+            Calendar.current.isDate(endsAt, inSameDayAs: now)
+                ? .dateTime.hour().minute() : .dateTime.weekday(.abbreviated).hour().minute())
+        return "\(hasEnded(at: now) ? "Ended" : "Ends") \(time)"
+    }
+
     public static func durationText(_ seconds: Int) -> String {
         Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .abbreviated))
     }
@@ -63,6 +71,23 @@ public struct Countdown: Identifiable, Hashable, Codable, Sendable {
     /// lists them the same way.
     public static func order(_ a: Countdown, _ b: Countdown) -> Bool {
         (a.endsAt, a.id.uuidString) < (b.endsAt, b.id.uuidString)
+    }
+
+    /// When a widget showing `timers` redraws, from `now` on: every minute while one runs, so its
+    /// ring drains, and the second each ends, for the next half hour. `next` is when to work out
+    /// more, or `nil` if every timer will have ended by then.
+    // ponytail: rings move a minute at a time, so a timer of a minute or two drains in big steps.
+    public static func widgetSchedule(for timers: [Countdown], from now: Date) -> (dates: [Date], next: Date?) {
+        let horizon = now.addingTimeInterval(30 * 60)
+        let lastEnd = timers.map(\.endsAt).max() ?? now
+        var dates: Set = [now]
+        var minute = now.addingTimeInterval(60)
+        while minute <= min(horizon, lastEnd) {
+            dates.insert(minute)
+            minute.addTimeInterval(60)
+        }
+        dates.formUnion(timers.map(\.endsAt).filter { $0 > now && $0 <= horizon })
+        return (dates.sorted(), lastEnd > horizon ? horizon : nil)
     }
 }
 
