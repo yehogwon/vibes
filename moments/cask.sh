@@ -43,6 +43,7 @@ cask "moments" do
   # deleting it would delete the moments on every Mac.
   zap trash: [
     "~/Library/Application Support/Moments",
+    "~/Library/Containers/io.github.yehogwon.Moments.Widgets",
     "~/Library/Preferences/io.github.yehogwon.Moments.plist",
   ]
 

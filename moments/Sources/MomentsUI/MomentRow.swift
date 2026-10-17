@@ -3,7 +3,7 @@ import SwiftUI
 
 /// One moment in the list: a countdown, an age, or a progress bar. The editor shows it at its top
 /// too, focused: with an avatar of its own, and the number to as many decimals as fit.
-struct MomentRow<Avatar: View>: View {
+public struct MomentRow<Avatar: View>: View {
     let moment: Moment
     let now: Date
     var isFocused = false
@@ -11,7 +11,14 @@ struct MomentRow<Avatar: View>: View {
     @State private var isHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
+    public init(moment: Moment, now: Date, isFocused: Bool = false, @ViewBuilder avatar: () -> Avatar) {
+        self.moment = moment
+        self.now = now
+        self.isFocused = isFocused
+        self.avatar = avatar()
+    }
+
+    public var body: some View {
         HStack(spacing: 10) {
             avatar
             if moment.kind == .progress {
@@ -57,28 +64,9 @@ struct MomentRow<Avatar: View>: View {
         }
     }
 
-    private var subtitle: String {
-        let count = moment.dayCount(on: now)
-        if moment.kind == .life {
-            let turning = count.occurrence ?? 0
-            return switch count.days {
-            case 0: "Turns \(turning) today 🎉"
-            case 1: "Turns \(turning) tomorrow"
-            default: "Turns \(turning) in \(count.days) days"
-            }
-        }
-        var parts = [count.target.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().year())]
-        switch moment.repeatCycle.step?.component {
-        case .day?: parts.append("Every week")
-        case .month?: parts.append("Every month")
-        case .year?: parts.append("Every year")
-        default: break
-        }
-        return parts.joined(separator: " · ")
-    }
-
     /// The subtitle, with a bell if there's a reminder.
     private var subtitleText: Text {
+        let subtitle = moment.subtitle(on: now)
         guard moment.remindDays >= 0 else { return Text(subtitle) }
         return Text("\(subtitle)  \(Image(systemName: "bell.fill"))")
     }
@@ -123,17 +111,23 @@ struct MomentRow<Avatar: View>: View {
 }
 
 extension MomentRow where Avatar == AvatarView {
-    init(moment: Moment, now: Date) {
+    public init(moment: Moment, now: Date) {
         self.init(moment: moment, now: now) { AvatarView(moment: moment, now: now) }
     }
 }
 
-struct ProgressBar: View {
+public struct ProgressBar: View {
     var fraction: Double
     var track: Color
     var bar: Color
 
-    var body: some View {
+    public init(fraction: Double, track: Color, bar: Color) {
+        self.fraction = fraction
+        self.track = track
+        self.bar = bar
+    }
+
+    public var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Capsule().fill(track)

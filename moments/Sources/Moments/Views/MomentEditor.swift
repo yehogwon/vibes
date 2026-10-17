@@ -1,6 +1,7 @@
 import AppKit
 import Carbon
 import MomentsCore
+import MomentsUI
 import SwiftUI
 import UniformTypeIdentifiers
 

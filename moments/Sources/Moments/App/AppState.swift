@@ -1,6 +1,7 @@
 import AppKit
 import MomentsCore
 import Observation
+import WidgetKit
 
 /// App-wide state: the moments, the clock the list counts by, and what the panel shows.
 @MainActor
@@ -51,7 +52,7 @@ final class AppState {
         // moments elsewhere.
         let localFolder =
             defaults.string(forKey: SettingsKey.localFolder).map { URL(fileURLWithPath: $0, isDirectory: true) }
-            ?? URL.applicationSupportDirectory.appendingPathComponent("Moments", isDirectory: true)
+            ?? MomentStore.defaultFolder
         store = MomentStore(
             libraryURL: localFolder.appendingPathComponent("Library.json"),
             backupFolder: localFolder.appendingPathComponent("Backups", isDirectory: true))
@@ -204,6 +205,8 @@ final class AppState {
                 self.momentsDidChange()
                 self.reminders.update(self.store.moments, now: self.now)
                 self.observeMoments()
+                // The widgets read the library, which is saved by now.
+                WidgetCenter.shared.reloadAllTimelines()
             }
         }
         reminders.update(store.moments, now: now)

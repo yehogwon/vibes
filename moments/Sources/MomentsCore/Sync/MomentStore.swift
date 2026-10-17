@@ -43,6 +43,15 @@ public final class MomentStore {
     /// Failed syncs in a row, for backing off.
     @ObservationIgnored private var failures = 0
 
+    /// Where this Mac keeps its copy of the moments, ~/Library/Application Support/Moments. Spelled
+    /// out from the account's home folder: the widgets run sandboxed, where Application Support
+    /// is a folder of their own.
+    nonisolated public static var defaultFolder: URL {
+        let home = getpwuid(getuid()).map { String(cString: $0.pointee.pw_dir) } ?? NSHomeDirectory()
+        return URL(fileURLWithPath: home, isDirectory: true)
+            .appendingPathComponent("Library/Application Support/Moments", isDirectory: true)
+    }
+
     /// - Parameters:
     ///   - libraryURL: This Mac's copy of the moments. Created on the first change.
     ///   - backupFolder: Where the sync folder's `moments.json` is copied before this Mac first

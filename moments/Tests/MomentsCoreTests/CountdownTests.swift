@@ -173,6 +173,17 @@ struct CountdownTests {
         #expect(headline(day, at: seoul.date(2026, 9, 28, 14, 36)) == "60.83333%")
         #expect(headline(day, at: seoul.date(2026, 9, 28, 14, 36), 0) == "60%")
     }
+
+    @Test func widgetRedrawsEachQuarterHourThroughMidnight() {
+        let now = seoul.date(2026, 10, 17, 23, 50)
+        let dates = Moment.widgetDates(from: now, calendar: seoul.calendar)
+        #expect(dates == [now] + (0..<8).map { seoul.date(2026, 10, 18, $0 / 4, $0 % 4 * 15) })
+
+        let noon = seoul.date(2026, 10, 17, 12)
+        let fromNoon = Moment.widgetDates(from: noon, calendar: seoul.calendar)
+        #expect(fromNoon.dropFirst().first == seoul.date(2026, 10, 17, 12, 15))
+        #expect(fromNoon.last == seoul.date(2026, 10, 17, 14))
+    }
 }
 
 @Suite("SpanProgress")
