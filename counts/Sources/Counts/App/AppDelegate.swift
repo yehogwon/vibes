@@ -34,6 +34,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.start()
     }
 
+    /// Opening Counts again, from a widget or the Finder, shows the timers.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        panel.open()
+        return false
+    }
+
     /// The timer that ends first, as "4:59" or "Done", or the app's icon when there are none.
     private func updateStatusItem() {
         guard let button = statusItem.button else { return }

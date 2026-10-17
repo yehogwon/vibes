@@ -1,6 +1,7 @@
 import AppKit
 import CountsCore
 import Observation
+import WidgetKit
 
 /// App-wide state: the timers, the clock they count by, and what the panel shows.
 @MainActor
@@ -39,7 +40,7 @@ final class AppState {
         // timers elsewhere.
         let localFolder =
             defaults.string(forKey: SettingsKey.localFolder).map { URL(fileURLWithPath: $0, isDirectory: true) }
-            ?? Self.renamed(URL.applicationSupportDirectory.appendingPathComponent("Counts", isDirectory: true))
+            ?? Self.renamed(TimerStore.defaultFolder)
         store = TimerStore(libraryURL: localFolder.appendingPathComponent("Library.json"))
         opensOnHover = defaults.object(forKey: SettingsKey.opensOnHover) as? Bool ?? true
     }
@@ -171,6 +172,8 @@ final class AppState {
             Task { @MainActor in
                 self?.tick()
                 self?.observeTimers()
+                // The widgets read the library, which is saved by now.
+                WidgetCenter.shared.reloadAllTimelines()
             }
         }
     }
