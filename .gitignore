@@ -292,6 +292,7 @@ iOSInjectionProject/
 # End of https://www.toptal.com/developers/gitignore/api/python,swift,macos
 
 /.claude/*
+!/.claude/agents/
 !/.claude/skills/
 !/.claude/plugins/
 !/.claude/settings.json
