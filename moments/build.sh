@@ -113,6 +113,11 @@ for binary in "$APP/Contents/MacOS/Moments" "$WIDGETS/Contents/MacOS/MomentsWidg
   fi
   echo "    $(basename "$binary"): $(lipo -archs "$binary"), macOS $MINOS and later, SDK $BUILT_SDK"
 done
+# Like any app extension, the widgets have to start in NSExtensionMain, or they crash on launch.
+if ! nm -u "$WIDGETS/Contents/MacOS/MomentsWidgets" | grep -qx _NSExtensionMain; then
+  echo "MomentsWidgets doesn't start in NSExtensionMain." >&2
+  exit 1
+fi
 
 echo "==> Signing (ad hoc)"
 # The widgets first, since signing the app seals what's inside it. They run sandboxed, with leave
