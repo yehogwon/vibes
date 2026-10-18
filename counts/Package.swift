@@ -16,11 +16,17 @@ let package = Package(
     ],
     targets: [
         .executableTarget(name: "Counts", dependencies: ["CountsCore"]),
-        // An app extension, so it's limited to the API extensions may use, as Xcode would.
+        // An app extension, built the way Xcode builds one.
         .executableTarget(
             name: "CountsWidgets", dependencies: ["CountsCore"],
+            // Limited to the API extensions may use.
             swiftSettings: [.unsafeFlags(["-application-extension"])],
-            linkerSettings: [.unsafeFlags(["-Xlinker", "-application_extension"])]),
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-application_extension"]),
+                // Starts in NSExtensionMain, which sets the extension up before handing over to the
+                // @main WidgetBundle. Started at its own main, the extension crashes on launch.
+                .unsafeFlags(["-Xlinker", "-e", "-Xlinker", "_NSExtensionMain"]),
+            ]),
         .target(name: "CountsCore"),
         .testTarget(name: "CountsCoreTests", dependencies: ["CountsCore"]),
     ]
